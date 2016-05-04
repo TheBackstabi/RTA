@@ -160,7 +160,7 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 
 bool DEMO_APP::Run()
 {
-	const float ColorRGBA[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+	const float ColorRGBA[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 
 	thedevicecontext->OMSetRenderTargets(1, &RTV, NULL);
 	thedevicecontext->RSSetViewports(1, &theVP);
