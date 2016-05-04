@@ -1,17 +1,3 @@
-// D3D LAB 1a "Line Land".
-// Author: L.Norri CD DRX, FullSail University
-
-// Introduction:
-// Welcome to the first lab of the Direct3D Graphics Programming class.
-// This is the ONLY guided lab in this course! 
-// Future labs will demand the habits & foundation you develop right now!  
-// It is CRITICAL that you follow each and every step. ESPECIALLY THE READING!!!
-
-// TO BEGIN: Open the word document that acompanies this lab and start from the top.
-
-//************************************************************
-//************ INCLUDES & DEFINES ****************************
-//************************************************************
 
 #include <iostream>
 #include <ctime>
@@ -24,11 +10,8 @@ using namespace std;
 
 #define BACKBUFFER_WIDTH	500
 #define BACKBUFFER_HEIGHT	500
-//************************************************************
-//************ SIMPLE WINDOWS APP CLASS **********************
-//************************************************************
 
-class DEMO_APP
+class RTA_PROJECT
 {
 	HINSTANCE						application;
 	WNDPROC							appWndProc;
@@ -48,13 +31,6 @@ class DEMO_APP
 	ID3D11VertexShader *vertexshader;
 	ID3D11PixelShader *pixelshader;
 
-	struct SEND_TO_VRAM
-	{
-		float constantColor[4];
-		float constantOffset[2];
-		float padding[2];
-	};
-	SEND_TO_VRAM toShader;
 	ID3D11InputLayout *InputLayout;
 
 public:
@@ -63,20 +39,13 @@ public:
 	{
 		float x, y;
 	};
-	SIMPLE_VERTEX vertexarr[360];
-	DEMO_APP(HINSTANCE hinst, WNDPROC proc);
+	RTA_PROJECT(HINSTANCE hinst, WNDPROC proc);
 	bool Run();
 	bool ShutDown();
 };
 
-//************************************************************
-//************ CREATION OF OBJECTS & RESOURCES ***************
-//************************************************************
-
-DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
+RTA_PROJECT::RTA_PROJECT(HINSTANCE hinst, WNDPROC proc)
 {
-	// ****************** BEGIN WARNING ***********************// 
-	// WINDOWS CODE, I DON'T TEACH THIS YOU MUST KNOW IT ALREADY! 
 	application = hinst;
 	appWndProc = proc;
 
@@ -88,7 +57,6 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	wndClass.hInstance = application;
 	wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wndClass.hbrBackground = (HBRUSH)(COLOR_WINDOWFRAME);
-	//wndClass.hIcon			= LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_FSICON));
 	RegisterClassEx(&wndClass);
 
 	RECT window_size = { 0, 0, BACKBUFFER_WIDTH, BACKBUFFER_HEIGHT };
@@ -99,7 +67,6 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 		NULL, NULL, application, this);
 
 	ShowWindow(window, SW_SHOW);
-	//********************* END WARNING ************************//
 
 #pragma region Device and Swapchain Stuff
 	DXGI_SWAP_CHAIN_DESC SwapChainDesc;
@@ -154,11 +121,7 @@ DEMO_APP::DEMO_APP(HINSTANCE hinst, WNDPROC proc)
 	thedevice->CreateVertexShader(VertexShader, VertexShadersize, NULL, &vertexshader);
 }
 
-//************************************************************
-//************ EXECUTION *************************************
-//************************************************************
-
-bool DEMO_APP::Run()
+bool RTA_PROJECT::Run()
 {
 	const float ColorRGBA[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
 
@@ -172,11 +135,7 @@ bool DEMO_APP::Run()
 	return true;
 }
 
-//************************************************************
-//************ DESTRUCTION ***********************************
-//************************************************************
-
-bool DEMO_APP::ShutDown()
+bool RTA_PROJECT::ShutDown()
 {
 	theswaswaswapchain->Release();
 	thedevice->Release();
@@ -187,19 +146,12 @@ bool DEMO_APP::ShutDown()
 	return true;
 }
 
-//************************************************************
-//************ WINDOWS RELATED *******************************
-//************************************************************
-
-// ****************** BEGIN WARNING ***********************// 
-// WINDOWS CODE, I DON'T TEACH THIS YOU MUST KNOW IT ALREADY!
-
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow);
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wparam, LPARAM lparam);
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPTSTR, int)
 {
 	srand(unsigned int(time(0)));
-	DEMO_APP myApp(hInstance, (WNDPROC)WndProc);
+	RTA_PROJECT myApp(hInstance, (WNDPROC)WndProc);
 	MSG msg; ZeroMemory(&msg, sizeof(msg));
 	while (msg.message != WM_QUIT && myApp.Run())
 	{
@@ -223,4 +175,3 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
-//********************* END WARNING ************************//
