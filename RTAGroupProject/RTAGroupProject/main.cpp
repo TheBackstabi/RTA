@@ -5,11 +5,11 @@
 #include "VertexShader.csh"
 #include "PixelShader.csh"
 #pragma comment (lib, "d3d11.lib")
-
+#define SAFE_RELEASE(p){if(p && p != nullptr){p->Release(); p = nullptr;}}
 using namespace std;
 
-#define BACKBUFFER_WIDTH	500
-#define BACKBUFFER_HEIGHT	500
+#define BACKBUFFER_WIDTH	1600
+#define BACKBUFFER_HEIGHT	900
 
 class RTA_PROJECT
 {
@@ -127,11 +127,16 @@ bool RTA_PROJECT::Run()
 
 bool RTA_PROJECT::ShutDown()
 {
-	theswaswaswapchain->Release();
-	thedevice->Release();
-	thedevicecontext->Release();
-	RTV->Release();
-	texture1->Release();
+	//SAFE_RELEASE(buffer);
+	SAFE_RELEASE(theswaswaswapchain);
+	SAFE_RELEASE(thedevice);
+	SAFE_RELEASE(thedevicecontext);
+	SAFE_RELEASE(RTV);
+	SAFE_RELEASE(texture1);
+	SAFE_RELEASE(vertexshader);
+	SAFE_RELEASE(pixelshader);
+//	SAFE_RELEASE(constbuffer);
+	//SAFE_RELEASE(InputLayout);
 	UnregisterClass(L"DirectXApplication", application);
 	return true;
 }
