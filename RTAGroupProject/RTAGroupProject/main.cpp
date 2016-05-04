@@ -105,16 +105,6 @@ RTA_PROJECT::RTA_PROJECT(HINSTANCE hinst, WNDPROC proc)
 
 #pragma endregion
 
-#pragma region Constant Buffer Stuff
-	ZeroMemory(&constbuffdesc, sizeof(constbuffdesc));
-
-	constbuffdesc.Usage = D3D11_USAGE_DYNAMIC;
-	constbuffdesc.ByteWidth = sizeof(SEND_TO_VRAM);
-	constbuffdesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	constbuffdesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-	thedevice->CreateBuffer(&constbuffdesc, NULL, &constbuffer);
-#pragma endregion
 	int PixelShadersize = sizeof(PixelShader) / sizeof(PixelShader[0]);
 	thedevice->CreatePixelShader(PixelShader, PixelShadersize, NULL, &pixelshader);
 	int VertexShadersize = sizeof(VertexShader) / sizeof(VertexShader[0]);
