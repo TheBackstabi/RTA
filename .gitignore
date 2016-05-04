@@ -1,2 +1,4 @@
 *.sdf
 x64
+*.suo
+*.csh

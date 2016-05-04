@@ -113,7 +113,7 @@ RTA_PROJECT::RTA_PROJECT(HINSTANCE hinst, WNDPROC proc)
 
 bool RTA_PROJECT::Run()
 {
-	const float ColorRGBA[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+	const float ColorRGBA[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 
 	thedevicecontext->OMSetRenderTargets(1, &RTV, NULL);
 	thedevicecontext->RSSetViewports(1, &theVP);
