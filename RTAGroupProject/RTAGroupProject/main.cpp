@@ -51,7 +51,7 @@ class RTAPROJECT
 	float translateparam = 0.0f;
 	ID3D11VertexShader *vertshader;
 	ID3D11PixelShader *pixshader;
-
+	POINT mousePos;
 public:
 
 	SEND_TO_VRAM toShader;
@@ -280,6 +280,8 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 
 bool RTAPROJECT::Run()
 {
+	POINT newMousePos = mousePos;
+	GetCursorPos(&newMousePos);
 	sc->GetDesc(&SwapChainDescVar);
 
 	XMStoreFloat4x4((XMFLOAT4X4*)&objecttoScene.ProjectionMatrix, XMMatrixPerspectiveFovLH(3.14 / 3.0f, (((float)SwapChainDescVar.BufferDesc.Width / 2) / (float)SwapChainDescVar.BufferDesc.Height), 0.1, 1000.0f));
@@ -390,6 +392,21 @@ bool RTAPROJECT::Run()
 
 
 	}
+	if (GetAsyncKeyState(VK_RBUTTON) || GetAsyncKeyState(VK_LBUTTON)){
+		FLOAT3 savedPosition;
+		savedPosition.x = objecttoScene.ViewMatrix.mat[0][3];
+		savedPosition.y = objecttoScene.ViewMatrix.mat[1][3];
+		savedPosition.z = objecttoScene.ViewMatrix.mat[2][3];
+		objecttoScene.ViewMatrix.mat[0][3] = objecttoScene.ViewMatrix.mat[1][3] = objecttoScene.ViewMatrix.mat[2][3] = 0;
+		float xRatio = float(newMousePos.x - mousePos.x);
+		float yRatio = float(newMousePos.y - mousePos.y);
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(xRatio*.01f));
+		objecttoScene.ViewMatrix = MatrixMultMatrix(RotationX(yRatio*.01f), objecttoScene.ViewMatrix);
+		objecttoScene.ViewMatrix.mat[0][3] = savedPosition.x;
+		objecttoScene.ViewMatrix.mat[1][3] = savedPosition.y;
+		objecttoScene.ViewMatrix.mat[2][3] = savedPosition.z;
+	}
+	mousePos = newMousePos;
 #pragma endregion
 	sc->Present(0, 0);
 

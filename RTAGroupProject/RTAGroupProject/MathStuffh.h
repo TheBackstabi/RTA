@@ -208,3 +208,81 @@ Matrix RotationY(float radian)
 
 	return RotateMat;
 }
+
+struct FLOAT2
+{
+	float u;
+	float v;
+	FLOAT2()
+	{
+		u = v = 0;
+	}
+	FLOAT2& operator=(const FLOAT2& _rhs)
+	{
+		u = _rhs.u;
+		v = _rhs.v;
+		return *this;
+	}
+};
+
+struct FLOAT3
+{
+	float x;
+	float y;
+	float z;
+	FLOAT3()
+	{
+		x = y = z = 0;
+	}
+	FLOAT3& operator=(const FLOAT2& _rhs)
+	{
+		x = _rhs.u;
+		y = _rhs.v;
+		z = 0;
+		return *this;
+	}
+	FLOAT3& operator=(const FLOAT3& _rhs)
+	{
+		x = _rhs.x;
+		y = _rhs.y;
+		z = _rhs.z;
+		return *this;
+	}
+};
+
+struct FLOAT4
+{
+	float x;
+	float y;
+	float z;
+	float w;
+	FLOAT4()
+	{
+		x = y = z = 0;
+		w = 1;
+	}
+	FLOAT4& operator=(const FLOAT2& _rhs)
+	{
+		x = _rhs.u;
+		y = _rhs.v;
+		z = 0;
+		w = 1;
+		return *this;
+	}
+	FLOAT4& operator=(const FLOAT3& _rhs)
+	{
+		x = _rhs.x;
+		y = _rhs.y;
+		z = _rhs.z;
+		w = 1;
+		return *this;
+	}
+	FLOAT4& operator=(const FLOAT4& _rhs)
+	{
+		x = _rhs.x;
+		y = _rhs.y;
+		z = _rhs.z;
+		w = _rhs.w;
+		return *this;
+	}
+};
