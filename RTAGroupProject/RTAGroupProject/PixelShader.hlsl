@@ -1,4 +1,10 @@
-float4 main() : SV_TARGET
+texture2D baseTexture : register(t0);
+
+SamplerState filter : register(s0) = NULL;
+
+float4 main(float2 baseUV : TEXCOORD0) : SV_TARGET
 {
-	return float4(1.0f, 1.0f, 1.0f, 1.0f);
+	float4 temp = baseTexture.Sample(filter, baseUV);
+
+	return temp;
 }
