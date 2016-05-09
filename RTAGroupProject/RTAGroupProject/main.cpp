@@ -350,6 +350,16 @@ bool RTAPROJECT::Run()
 
 
 	}
+	if (GetAsyncKeyState('Q'))
+	{
+		objecttoScene.ViewMatrix.mat[3][1] -= translateparam;
+
+	}
+	if (GetAsyncKeyState('E'))
+	{
+		objecttoScene.ViewMatrix.mat[3][1] += translateparam;
+
+	}
 	if (GetAsyncKeyState(VK_DOWN))
 	{
 		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(.001));
