@@ -352,11 +352,13 @@ bool RTAPROJECT::Run()
 	}
 	if (GetAsyncKeyState('Q'))
 	{
+		translateparam = .01;
 		objecttoScene.ViewMatrix.mat[3][1] -= translateparam;
 
 	}
 	if (GetAsyncKeyState('E'))
 	{
+		translateparam = .01;
 		objecttoScene.ViewMatrix.mat[3][1] += translateparam;
 
 	}
