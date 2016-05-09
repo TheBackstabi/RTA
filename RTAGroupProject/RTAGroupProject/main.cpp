@@ -283,9 +283,72 @@ bool RTAPROJECT::Run()
 {
 	POINT newMousePos = mousePos;
 	GetCursorPos(&newMousePos);
+	if (GetAsyncKeyState('W'))
+	{
+		translateparam = .01;
+		objecttoScene.ViewMatrix = MatrixMultMatrix(MatrixTranslateZ(translateparam), objecttoScene.ViewMatrix);
+	}
+	if (GetAsyncKeyState('S'))
+	{
+		translateparam = .01;
+		objecttoScene.ViewMatrix = MatrixMultMatrix(MatrixTranslateZ(-translateparam), objecttoScene.ViewMatrix);
+	}
+	if (GetAsyncKeyState('A'))
+	{
+		translateparam = .01;
+		objecttoScene.ViewMatrix = MatrixMultMatrix(MatrixTranslateX(-translateparam), objecttoScene.ViewMatrix);
+	}
+	if (GetAsyncKeyState('D'))
+	{
+		translateparam = .01;
+		objecttoScene.ViewMatrix = MatrixMultMatrix(MatrixTranslateX(translateparam), objecttoScene.ViewMatrix);
+	}
+	if (GetAsyncKeyState('Q'))
+	{
+		translateparam = .01;
+		objecttoScene.ViewMatrix.mat[3][1] += translateparam;
+	}
+	if (GetAsyncKeyState('E'))
+	{
+		translateparam = .01;
+		objecttoScene.ViewMatrix.mat[3][1] -= translateparam;
+
+	}
+	if (GetAsyncKeyState(VK_DOWN))
+	{
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(-.001));
+	}
+	if (GetAsyncKeyState(VK_UP))
+	{
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(.001));
+	}
+	if (GetAsyncKeyState(VK_LEFT))
+	{
+		objecttoScene.ViewMatrix = MatrixMultMatrix(RotationY(.001), objecttoScene.ViewMatrix);
+	}
+	if (GetAsyncKeyState(VK_RIGHT))
+	{
+		objecttoScene.ViewMatrix = MatrixMultMatrix(RotationY(-.001), objecttoScene.ViewMatrix);
+	}
+	if (GetAsyncKeyState(VK_RBUTTON) || GetAsyncKeyState(VK_LBUTTON)){
+		FLOAT3 savedPosition;
+		savedPosition.x = objecttoScene.ViewMatrix.mat[3][0];
+		savedPosition.y = objecttoScene.ViewMatrix.mat[3][1];
+		savedPosition.z = objecttoScene.ViewMatrix.mat[3][2];
+		objecttoScene.ViewMatrix.mat[3][0] = objecttoScene.ViewMatrix.mat[3][1] = objecttoScene.ViewMatrix.mat[3][2] = 0;
+		float xRatio = float(newMousePos.x - mousePos.x);
+		float yRatio = float(newMousePos.y - mousePos.y);
+		objecttoScene.ViewMatrix = MatrixMultMatrix(RotationX(-yRatio*.01f), objecttoScene.ViewMatrix);
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(-xRatio*.01f));
+		objecttoScene.ViewMatrix.mat[3][0] = savedPosition.x;
+		objecttoScene.ViewMatrix.mat[3][1] = savedPosition.y;
+		objecttoScene.ViewMatrix.mat[3][2] = savedPosition.z;
+	}
+	mousePos = newMousePos;
 	sc->GetDesc(&SwapChainDescVar);
 
 	XMStoreFloat4x4((XMFLOAT4X4*)&objecttoScene.ProjectionMatrix, XMMatrixPerspectiveFovLH(3.14 / 3.0f, (((float)SwapChainDescVar.BufferDesc.Width / 2) / (float)SwapChainDescVar.BufferDesc.Height), 0.1, 1000.0f));
+
 
 	const float ColorRGBA[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	thedevicecontext->ClearRenderTargetView(RenTarView, ColorRGBA);
@@ -302,8 +365,10 @@ bool RTAPROJECT::Run()
 
 	thedevicecontext->Unmap(constbuffer, NULL);
 	thedevicecontext->Map(constbuffer2, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &Mapsubres2);
-
+	Matrix savedViewMatrix = objecttoScene.ViewMatrix;
+	SpecialCaseMatInverse(objecttoScene.ViewMatrix);
 	memcpy(Mapsubres2.pData, &objecttoScene, sizeof(objecttoScene));
+	objecttoScene.ViewMatrix = savedViewMatrix;
 
 	thedevicecontext->Unmap(constbuffer2, NULL);
 	thedevicecontext->VSSetConstantBuffers(0, 1, &constbuffer);
@@ -318,96 +383,6 @@ bool RTAPROJECT::Run()
 	thedevicecontext->IASetInputLayout(InputLayout);
 	thedevicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	thedevicecontext->DrawIndexed(temptriangle.size(), 0, 0);
-	
-	if (GetAsyncKeyState('W'))
-	{
-		translateparam = .01;
-		objecttoScene.ViewMatrix.mat[3][2] -= translateparam;
-
-
-
-	}
-	if (GetAsyncKeyState('S'))
-	{
-		translateparam = .01;
-		
-		objecttoScene.ViewMatrix.mat[3][2] += translateparam;
-
-
-
-	}
-	if (GetAsyncKeyState('A'))
-	{
-		translateparam = .01;
-		
-		objecttoScene.ViewMatrix.mat[3][0] += translateparam;
-
-
-
-	}
-	if (GetAsyncKeyState('D'))
-	{
-		translateparam = .01;
-		objecttoScene.ViewMatrix.mat[3][0] -= translateparam;
-
-
-
-	}
-	if (GetAsyncKeyState('Q'))
-	{
-		translateparam = .01;
-		objecttoScene.ViewMatrix.mat[3][1] -= translateparam;
-
-	}
-	if (GetAsyncKeyState('E'))
-	{
-		translateparam = .01;
-		objecttoScene.ViewMatrix.mat[3][1] += translateparam;
-
-	}
-	if (GetAsyncKeyState(VK_DOWN))
-	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(.001));
-
-
-
-	}
-	if (GetAsyncKeyState(VK_UP))
-	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(-.001));
-
-
-
-	}
-	if (GetAsyncKeyState(VK_LEFT))
-	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(-.001));
-
-
-
-	}
-	if (GetAsyncKeyState(VK_RIGHT))
-	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(.001));
-
-
-
-	}
-	if (GetAsyncKeyState(VK_RBUTTON) || GetAsyncKeyState(VK_LBUTTON)){
-		FLOAT3 savedPosition;
-		savedPosition.x = objecttoScene.ViewMatrix.mat[0][3];
-		savedPosition.y = objecttoScene.ViewMatrix.mat[1][3];
-		savedPosition.z = objecttoScene.ViewMatrix.mat[2][3];
-		objecttoScene.ViewMatrix.mat[0][3] = objecttoScene.ViewMatrix.mat[1][3] = objecttoScene.ViewMatrix.mat[2][3] = 0;
-		float xRatio = float(newMousePos.x - mousePos.x);
-		float yRatio = float(newMousePos.y - mousePos.y);
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(xRatio*.01f));
-		objecttoScene.ViewMatrix = MatrixMultMatrix(RotationX(yRatio*.01f), objecttoScene.ViewMatrix);
-		objecttoScene.ViewMatrix.mat[0][3] = savedPosition.x;
-		objecttoScene.ViewMatrix.mat[1][3] = savedPosition.y;
-		objecttoScene.ViewMatrix.mat[2][3] = savedPosition.z;
-	}
-	mousePos = newMousePos;
 #pragma endregion
 	sc->Present(0, 0);
 
