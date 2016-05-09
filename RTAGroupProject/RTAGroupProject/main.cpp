@@ -130,8 +130,6 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	objecttoScene.ViewMatrix = Identity();
 	objecttoObject.WorldMat = DirectXWorldMat();
 
-	SpecialCaseMatInverse(objecttoScene.ViewMatrix);
-
 	ZeroMemory(&SwapChainDescVar, sizeof(DXGI_SWAP_CHAIN_DESC));
 
 	SwapChainDescVar.BufferCount = 1;
@@ -284,7 +282,7 @@ bool RTAPROJECT::Run()
 	POINT newMousePos = mousePos;
 	GetCursorPos(&newMousePos);
 	sc->GetDesc(&SwapChainDescVar);
-
+	SpecialCaseMatInverse(objecttoScene.ViewMatrix);
 	XMStoreFloat4x4((XMFLOAT4X4*)&objecttoScene.ProjectionMatrix, XMMatrixPerspectiveFovLH(3.14 / 3.0f, (((float)SwapChainDescVar.BufferDesc.Width / 2) / (float)SwapChainDescVar.BufferDesc.Height), 0.1, 1000.0f));
 
 	const float ColorRGBA[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
