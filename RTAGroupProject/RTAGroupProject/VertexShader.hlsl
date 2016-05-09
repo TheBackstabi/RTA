@@ -7,7 +7,8 @@ struct V_IN
 struct V_OUT
 {
 	float2 uvs : TEXCOORD0;
-	float3 normals : TEXCOORD1;
+	float4 worldPos : WORLD_POS;
+	float3 normals : NORM;
 	float4 posH : SV_POSITION;
 };
 cbuffer OBJECT : register(b0)
@@ -24,6 +25,7 @@ V_OUT main(V_IN input)
 	V_OUT output = (V_OUT)0;
 	float4 localH = float4(input.posL, 1);
 	localH = mul(worldMatrix, localH);
+	output.worldPos = localH;
 	localH = mul(viewMatrix, localH);
 
 	localH = mul(projectionMatrix, localH);
