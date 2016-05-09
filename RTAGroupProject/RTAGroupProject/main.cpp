@@ -53,8 +53,21 @@ class RTAPROJECT
 	ID3D11VertexShader *vertshader;
 	ID3D11PixelShader *pixshader;
 	POINT mousePos;
+	FbxManager* fbxManager = nullptr;
 public:
 
+	struct MyVertex
+	{
+		float pos[3];
+	};
+	struct MyUV
+	{
+		float uv[2];
+	};
+	struct MyNormal
+	{
+		float normal[3];
+	};
 	SEND_TO_VRAM toShader;
 	ID3D11InputLayout *InputLayout;
 	SEND_TO_OBJECT objecttoObject;
@@ -68,7 +81,96 @@ public:
 	RTAPROJECT(HINSTANCE hinst, WNDPROC proc);
 	bool Run();
 	bool ShutDown();
+	HRESULT LoadFBX(string filePath,vector<MyVertex>* pOutVertexVector, vector<MyNormal>* pOutNormalVector, vector<MyUV>* pOutUVector);
 };
+
+HRESULT RTAPROJECT::LoadFBX(string filePath,vector<MyVertex>* pOutVertexVector, vector<MyNormal>* pOutNormalVector, vector<MyUV>* pOutUVector)
+{
+	if (fbxManager == nullptr)
+	{
+		fbxManager = FbxManager::Create();
+
+		FbxIOSettings* pIOsettings = FbxIOSettings::Create(fbxManager, IOSROOT);
+		fbxManager->SetIOSettings(pIOsettings);
+	}
+
+	FbxImporter* pImporter = FbxImporter::Create(fbxManager, "");
+	FbxScene* pFbxScene = FbxScene::Create(fbxManager, "");
+
+	bool bSuccess = pImporter->Initialize(filePath.c_str(), -1, fbxManager->GetIOSettings());
+	if (!bSuccess) return E_FAIL;
+
+	bSuccess = pImporter->Import(pFbxScene);
+	if (!bSuccess) return E_FAIL;
+
+	pImporter->Destroy();
+
+	FbxNode* pFbxRootNode = pFbxScene->GetRootNode();
+
+	if (pFbxRootNode)
+	{
+		for (int i = 0; i < pFbxRootNode->GetChildCount(); i++)
+		{
+			FbxNode* pFbxChildNode = pFbxRootNode->GetChild(i);
+
+			if (pFbxChildNode->GetNodeAttribute() == NULL)
+				continue;
+
+			FbxNodeAttribute::EType AttributeType = pFbxChildNode->GetNodeAttribute()->GetAttributeType();
+
+			if (AttributeType != FbxNodeAttribute::eMesh)
+				continue;
+
+			FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
+
+			FbxVector4* pVertices = pMesh->GetControlPoints();
+			bool unmapped;
+			for (int j = 0; j < pMesh->GetPolygonCount(); j++)
+			{
+				int iNumVertices = pMesh->GetPolygonSize(j);
+				assert(iNumVertices == 3);
+				
+				for (int k = 0; k < iNumVertices; k++)
+				{
+					int iControlPointIndex = pMesh->GetPolygonVertex(j, k);
+						
+
+					MyUV uv;
+					FbxVector2 uvCoords;
+					FbxStringList uvStringList;
+					pMesh->GetUVSetNames(uvStringList);
+					
+					pMesh->GetPolygonVertexUV(j, k, uvStringList.GetStringAt(0), uvCoords,unmapped);
+					uv.uv[0] = static_cast<float>(uvCoords[0]);
+					uv.uv[1] = static_cast<float>(uvCoords[1]);
+					pOutUVector->push_back(uv);
+
+					MyVertex vertex;
+					vertex.pos[0] = (float)pVertices[iControlPointIndex].mData[0];
+					vertex.pos[1] = (float)pVertices[iControlPointIndex].mData[1];
+					vertex.pos[2] = (float)pVertices[iControlPointIndex].mData[2];
+					pOutVertexVector->push_back(vertex);
+
+					
+					MyNormal norm;
+					FbxVector4 fbxNormal;
+					bool result = pMesh->GetPolygonVertexNormal(j, k, fbxNormal);
+					norm.normal[0] = fbxNormal.mData[0];
+					norm.normal[1] = fbxNormal.mData[1];
+					norm.normal[2] = fbxNormal.mData[2];
+
+					pOutNormalVector->push_back(norm);
+
+
+
+				}
+			}
+
+		}
+
+	}
+	return S_OK;
+}
 
 void loadfromfile(string filepath, RTAPROJECT* tempthis)
 {
@@ -159,7 +261,7 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	CreateDDSTextureFromFile(thedevice, L"cartoon_stone2_seamless.dds", NULL, &floorRSV[0]);
 	
 	loadfromfile("Arwing_002.mesh", this);
-	int size = tempverts.size();
+	size_t size = tempverts.size();
 	SIMPLE_VERTEX* loadedvertexes = new SIMPLE_VERTEX[size];
 	for (unsigned int i = 0; i < tempverts.size(); i++)
 	{
@@ -285,9 +387,9 @@ bool RTAPROJECT::Run()
 	GetCursorPos(&newMousePos);
 	sc->GetDesc(&SwapChainDescVar);
 
-	XMStoreFloat4x4((XMFLOAT4X4*)&objecttoScene.ProjectionMatrix, XMMatrixPerspectiveFovLH(3.14 / 3.0f, (((float)SwapChainDescVar.BufferDesc.Width / 2) / (float)SwapChainDescVar.BufferDesc.Height), 0.1, 1000.0f));
+	XMStoreFloat4x4((XMFLOAT4X4*)&objecttoScene.ProjectionMatrix, XMMatrixPerspectiveFovLH(3.14f / 3.0f, (((float)SwapChainDescVar.BufferDesc.Width / 2) / (float)SwapChainDescVar.BufferDesc.Height), 0.1f, 1000.0f));
 
-	const float ColorRGBA[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+	const float ColorRGBA[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
 	thedevicecontext->ClearRenderTargetView(RenTarView, ColorRGBA);
 
 	thedevicecontext->ClearDepthStencilView(pDSV, D3D11_CLEAR_DEPTH, 1, NULL);
@@ -321,7 +423,7 @@ bool RTAPROJECT::Run()
 	
 	if (GetAsyncKeyState('W'))
 	{
-		translateparam = .01;
+		translateparam = .01f;
 		objecttoScene.ViewMatrix.mat[3][2] -= translateparam;
 
 
@@ -329,7 +431,7 @@ bool RTAPROJECT::Run()
 	}
 	if (GetAsyncKeyState('S'))
 	{
-		translateparam = .01;
+		translateparam = .01f;
 		
 		objecttoScene.ViewMatrix.mat[3][2] += translateparam;
 
@@ -338,7 +440,7 @@ bool RTAPROJECT::Run()
 	}
 	if (GetAsyncKeyState('A'))
 	{
-		translateparam = .01;
+		translateparam = .01f;
 		
 		objecttoScene.ViewMatrix.mat[3][0] += translateparam;
 
@@ -347,7 +449,7 @@ bool RTAPROJECT::Run()
 	}
 	if (GetAsyncKeyState('D'))
 	{
-		translateparam = .01;
+		translateparam = .01f;
 		objecttoScene.ViewMatrix.mat[3][0] -= translateparam;
 
 
@@ -355,40 +457,40 @@ bool RTAPROJECT::Run()
 	}
 	if (GetAsyncKeyState('Q'))
 	{
-		translateparam = .01;
+		translateparam = .01f;
 		objecttoScene.ViewMatrix.mat[3][1] -= translateparam;
 
 	}
 	if (GetAsyncKeyState('E'))
 	{
-		translateparam = .01;
+		translateparam = .01f;
 		objecttoScene.ViewMatrix.mat[3][1] += translateparam;
 
 	}
 	if (GetAsyncKeyState(VK_DOWN))
 	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(.001));
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(.001f));
 
 
 
 	}
 	if (GetAsyncKeyState(VK_UP))
 	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(-.001));
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(-.001f));
 
 
 
 	}
 	if (GetAsyncKeyState(VK_LEFT))
 	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(-.001));
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(-.001f));
 
 
 
 	}
 	if (GetAsyncKeyState(VK_RIGHT))
 	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(.001));
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(.001f));
 
 
 
