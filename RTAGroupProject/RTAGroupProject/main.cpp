@@ -10,6 +10,7 @@
 #include "DDSTextureLoader.h"
 #include "VertexShader.csh"
 #include "PixelShader.csh"
+#include <fbxsdk.h>
 #pragma comment (lib, "d3d11.lib")
 #pragma comment (lib, "dxgi.lib") 
 #define SAFE_RELEASE(p){if(p && p != nullptr){p->Release(); p = nullptr;}}
