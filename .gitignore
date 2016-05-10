@@ -2,3 +2,6 @@
 x64
 *.suo
 *.csh
+*.tlog
+*.cso
+*.log

@@ -53,8 +53,25 @@ class RTAPROJECT
 	ID3D11VertexShader *vertshader;
 	ID3D11PixelShader *pixshader;
 	POINT mousePos;
+	FbxManager* fbxManager = nullptr;
 public:
 
+	struct MyVertex
+	{
+		float pos[3];
+	};
+	struct MyUV
+	{
+		float uv[2];
+	};
+	struct MyNormal
+	{
+		float normal[3];
+	};
+	vector<MyVertex> vertexvec;
+	vector<MyNormal> normalvec;
+	vector<MyUV> uvvec;
+	vector<unsigned int> indiciesvec;
 	SEND_TO_VRAM toShader;
 	ID3D11InputLayout *InputLayout;
 	SEND_TO_OBJECT objecttoObject;
@@ -68,7 +85,96 @@ public:
 	RTAPROJECT(HINSTANCE hinst, WNDPROC proc);
 	bool Run();
 	bool ShutDown();
+	HRESULT LoadFBX(string filePath,vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector, vector<unsigned int>& pOutIndiciesVector);
 };
+
+HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector, vector<unsigned int>& pOutIndiciesVector)
+{
+	if (fbxManager == nullptr)
+	{
+		fbxManager = FbxManager::Create();
+
+		FbxIOSettings* pIOsettings = FbxIOSettings::Create(fbxManager, IOSROOT);
+		fbxManager->SetIOSettings(pIOsettings);
+	}
+
+	FbxImporter* pImporter = FbxImporter::Create(fbxManager, "");
+	FbxScene* pFbxScene = FbxScene::Create(fbxManager, "");
+
+	bool bSuccess = pImporter->Initialize(filePath.c_str(), -1, fbxManager->GetIOSettings());
+	if (!bSuccess) return E_FAIL;
+
+	bSuccess = pImporter->Import(pFbxScene);
+	if (!bSuccess) return E_FAIL;
+
+	pImporter->Destroy();
+
+	FbxNode* pFbxRootNode = pFbxScene->GetRootNode();
+
+	if (pFbxRootNode)
+	{
+		for (int i = 0; i < pFbxRootNode->GetChildCount(); i++)
+		{
+			FbxNode* pFbxChildNode = pFbxRootNode->GetChild(i);
+
+			if (pFbxChildNode->GetNodeAttribute() == NULL)
+				continue;
+
+			FbxNodeAttribute::EType AttributeType = pFbxChildNode->GetNodeAttribute()->GetAttributeType();
+
+			if (AttributeType != FbxNodeAttribute::eMesh)
+				continue;
+
+			FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
+
+			FbxVector4* pVertices = pMesh->GetControlPoints();
+			bool unmapped;
+			for (int j = 0; j < pMesh->GetPolygonCount(); j++)
+			{
+				int iNumVertices = pMesh->GetPolygonSize(j);
+				assert(iNumVertices == 3);
+				
+				for (int k = 0; k < iNumVertices; k++)
+				{
+					int iControlPointIndex = pMesh->GetPolygonVertex(j, k);
+						
+
+					MyUV uv;
+					FbxVector2 uvCoords;
+					FbxStringList uvStringList;
+					pMesh->GetUVSetNames(uvStringList);
+					
+					pMesh->GetPolygonVertexUV(j, k, uvStringList.GetStringAt(0), uvCoords,unmapped);
+					uv.uv[0] = static_cast<float>(uvCoords[0]);
+					uv.uv[1] = static_cast<float>(uvCoords[1]);
+					pOutUVector.push_back(uv);
+
+					MyVertex vertex;
+					vertex.pos[0] = (float)pVertices[iControlPointIndex].mData[0];
+					vertex.pos[1] = (float)pVertices[iControlPointIndex].mData[1];
+					vertex.pos[2] = (float)pVertices[iControlPointIndex].mData[2];
+					pOutVertexVector.push_back(vertex);
+
+					
+					MyNormal norm;
+					FbxVector4 fbxNormal;
+					bool result = pMesh->GetPolygonVertexNormal(j, k, fbxNormal);
+					norm.normal[0] = fbxNormal.mData[0];
+					norm.normal[1] = fbxNormal.mData[1];
+					norm.normal[2] = fbxNormal.mData[2];
+
+					pOutNormalVector.push_back(norm);
+
+					pOutIndiciesVector.push_back(iControlPointIndex);
+
+				}
+			}
+
+		}
+
+	}
+	return S_OK;
+}
 
 void loadfromfile(string filepath, RTAPROJECT* tempthis)
 {
@@ -155,25 +261,27 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	sc->GetDesc(&SwapChainDescVar);
 
 	CreateDDSTextureFromFile(thedevice, L"cartoon_stone2_seamless.dds", NULL, &floorRSV[0]);
-	
+
+	LoadFBX("Box_BindPose.fbx", vertexvec, normalvec, uvvec, indiciesvec);
 	loadfromfile("Arwing_002.mesh", this);
-	int size = tempverts.size();
+	size_t size = vertexvec.size();
 	SIMPLE_VERTEX* loadedvertexes = new SIMPLE_VERTEX[size];
-	for (unsigned int i = 0; i < tempverts.size(); i++)
+	for (unsigned int i = 0; i < vertexvec.size(); i++)
 	{
-		loadedvertexes[i].x = tempverts[i].fX;
-		loadedvertexes[i].y = tempverts[i].fY;
-		loadedvertexes[i].z = tempverts[i].fZ;
+		
+		loadedvertexes[i].x = vertexvec[i].pos[0];
+		loadedvertexes[i].y = vertexvec[i].pos[1];
+		loadedvertexes[i].z = vertexvec[i].pos[2];
 		loadedvertexes[i].w = 1;
-		loadedvertexes[i].n = tempverts[i].fNX;
-		loadedvertexes[i].r = tempverts[i].fNY;
-		loadedvertexes[i].m = tempverts[i].fNZ;
-		loadedvertexes[i].u = tempverts[i].fU;
-		loadedvertexes[i].v = tempverts[i].fV;
+		loadedvertexes[i].n = normalvec[i].normal[0];
+		loadedvertexes[i].r = normalvec[i].normal[1];
+		loadedvertexes[i].m = normalvec[i].normal[2];
+		loadedvertexes[i].u = uvvec[i].uv[0];
+		loadedvertexes[i].v = uvvec[i].uv[1];
 	}
 
-	unsigned int* loadedindicies =  new unsigned int[temptriangle.size()];
-	for (unsigned int j = 0; j < temptriangle.size(); j++)
+	unsigned int* loadedindicies =  new unsigned int[indiciesvec.size()];
+	for (unsigned int j = 0; j < indiciesvec.size(); j++)
 	{
 		loadedindicies[j] = temptriangle[j];
 	}
@@ -195,7 +303,7 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	ZeroMemory(&buffdesc, sizeof(buffdesc));
 
 	buffdesc.Usage = D3D11_USAGE_IMMUTABLE;
-	buffdesc.ByteWidth = sizeof(SIMPLE_VERTEX) * tempverts.size();
+	buffdesc.ByteWidth = sizeof(SIMPLE_VERTEX) * vertexvec.size();
 	buffdesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	buffdesc.CPUAccessFlags = NULL;
 
@@ -209,7 +317,7 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	ZeroMemory(&Indexbufferdesc, sizeof(Indexbufferdesc));
 
 	Indexbufferdesc.Usage = D3D11_USAGE_IMMUTABLE;
-	Indexbufferdesc.ByteWidth = sizeof(unsigned int) * temptriangle.size();
+	Indexbufferdesc.ByteWidth = sizeof(unsigned int) * indiciesvec.size();
 	Indexbufferdesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 	Indexbufferdesc.CPUAccessFlags = NULL;
 
@@ -282,10 +390,86 @@ bool RTAPROJECT::Run()
 	POINT newMousePos = mousePos;
 	GetCursorPos(&newMousePos);
 	sc->GetDesc(&SwapChainDescVar);
-	SpecialCaseMatInverse(objecttoScene.ViewMatrix);
-	XMStoreFloat4x4((XMFLOAT4X4*)&objecttoScene.ProjectionMatrix, XMMatrixPerspectiveFovLH(3.14 / 3.0f, (((float)SwapChainDescVar.BufferDesc.Width / 2) / (float)SwapChainDescVar.BufferDesc.Height), 0.1, 1000.0f));
+	
+	XMStoreFloat4x4((XMFLOAT4X4*)&objecttoScene.ProjectionMatrix, XMMatrixPerspectiveFovLH(3.14f / 3.0f, (((float)SwapChainDescVar.BufferDesc.Width / 2) / (float)SwapChainDescVar.BufferDesc.Height), 0.1f, 1000.0f));
 
-	const float ColorRGBA[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+	if (GetAsyncKeyState('W'))
+	{
+		translateparam = .01f;
+		objecttoScene.ViewMatrix.mat[3][2] += translateparam;
+
+
+
+	}
+	if (GetAsyncKeyState('S'))
+	{
+		translateparam = .01f;
+
+		objecttoScene.ViewMatrix.mat[3][2] -= translateparam;
+
+
+
+	}
+	if (GetAsyncKeyState('A'))
+	{
+		translateparam = .01f;
+
+		objecttoScene.ViewMatrix.mat[3][0] -= translateparam;
+
+
+
+	}
+	if (GetAsyncKeyState('D'))
+	{
+		translateparam = .01f;
+		objecttoScene.ViewMatrix.mat[3][0] += translateparam;
+
+
+
+	}
+	if (GetAsyncKeyState('Q'))
+	{
+		translateparam = .01f;
+		objecttoScene.ViewMatrix.mat[3][1] += translateparam;
+
+	}
+	if (GetAsyncKeyState('E'))
+	{
+		translateparam = .01f;
+		objecttoScene.ViewMatrix.mat[3][1] -= translateparam;
+
+	}
+	if (GetAsyncKeyState(VK_DOWN))
+	{
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(-.001f));
+	}
+	if (GetAsyncKeyState(VK_UP))
+	{
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(.001f));
+	}
+	if (GetAsyncKeyState(VK_LEFT))
+	{
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(.001f));
+	}
+	if (GetAsyncKeyState(VK_RIGHT))
+	{
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(-.001f));
+	}
+	if (GetAsyncKeyState(VK_RBUTTON) || GetAsyncKeyState(VK_LBUTTON)){
+		FLOAT3 savedPosition;
+		savedPosition.x = objecttoScene.ViewMatrix.mat[0][3];
+		savedPosition.y = objecttoScene.ViewMatrix.mat[1][3];
+		savedPosition.z = objecttoScene.ViewMatrix.mat[2][3];
+		objecttoScene.ViewMatrix.mat[0][3] = objecttoScene.ViewMatrix.mat[1][3] = objecttoScene.ViewMatrix.mat[2][3] = 0;
+		float xRatio = float(newMousePos.x - mousePos.x);
+		float yRatio = float(newMousePos.y - mousePos.y);
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(-xRatio*.01f));
+		objecttoScene.ViewMatrix = MatrixMultMatrix(RotationX(-yRatio*.01f), objecttoScene.ViewMatrix);
+		objecttoScene.ViewMatrix.mat[0][3] = savedPosition.x;
+		objecttoScene.ViewMatrix.mat[1][3] = savedPosition.y;
+		objecttoScene.ViewMatrix.mat[2][3] = savedPosition.z;
+	}
+	const float ColorRGBA[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
 	thedevicecontext->ClearRenderTargetView(RenTarView, ColorRGBA);
 
 	thedevicecontext->ClearDepthStencilView(pDSV, D3D11_CLEAR_DEPTH, 1, NULL);
@@ -300,9 +484,10 @@ bool RTAPROJECT::Run()
 
 	thedevicecontext->Unmap(constbuffer, NULL);
 	thedevicecontext->Map(constbuffer2, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &Mapsubres2);
-
+	Matrix savedView = objecttoScene.ViewMatrix;
+	SpecialCaseMatInverse(objecttoScene.ViewMatrix);
 	memcpy(Mapsubres2.pData, &objecttoScene, sizeof(objecttoScene));
-
+	objecttoScene.ViewMatrix = savedView;
 	thedevicecontext->Unmap(constbuffer2, NULL);
 	thedevicecontext->VSSetConstantBuffers(0, 1, &constbuffer);
 	thedevicecontext->VSSetConstantBuffers(1, 1, &constbuffer2);
@@ -315,96 +500,9 @@ bool RTAPROJECT::Run()
 	thedevicecontext->PSSetShaderResources(0, 1, &floorRSV[0]);
 	thedevicecontext->IASetInputLayout(InputLayout);
 	thedevicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	thedevicecontext->DrawIndexed(temptriangle.size(), 0, 0);
-	
-	if (GetAsyncKeyState('W'))
-	{
-		translateparam = .01;
-		objecttoScene.ViewMatrix.mat[3][2] -= translateparam;
+	//thedevicecontext->DrawIndexed(indiciesvec.size(), 0, 0);
+	thedevicecontext->Draw(vertexvec.size(), 0);
 
-
-
-	}
-	if (GetAsyncKeyState('S'))
-	{
-		translateparam = .01;
-		
-		objecttoScene.ViewMatrix.mat[3][2] += translateparam;
-
-
-
-	}
-	if (GetAsyncKeyState('A'))
-	{
-		translateparam = .01;
-		
-		objecttoScene.ViewMatrix.mat[3][0] += translateparam;
-
-
-
-	}
-	if (GetAsyncKeyState('D'))
-	{
-		translateparam = .01;
-		objecttoScene.ViewMatrix.mat[3][0] -= translateparam;
-
-
-
-	}
-	if (GetAsyncKeyState('Q'))
-	{
-		translateparam = .01;
-		objecttoScene.ViewMatrix.mat[3][1] -= translateparam;
-
-	}
-	if (GetAsyncKeyState('E'))
-	{
-		translateparam = .01;
-		objecttoScene.ViewMatrix.mat[3][1] += translateparam;
-
-	}
-	if (GetAsyncKeyState(VK_DOWN))
-	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(.001));
-
-
-
-	}
-	if (GetAsyncKeyState(VK_UP))
-	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(-.001));
-
-
-
-	}
-	if (GetAsyncKeyState(VK_LEFT))
-	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(-.001));
-
-
-
-	}
-	if (GetAsyncKeyState(VK_RIGHT))
-	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(.001));
-
-
-
-	}
-	if (GetAsyncKeyState(VK_RBUTTON) || GetAsyncKeyState(VK_LBUTTON)){
-		FLOAT3 savedPosition;
-		savedPosition.x = objecttoScene.ViewMatrix.mat[0][3];
-		savedPosition.y = objecttoScene.ViewMatrix.mat[1][3];
-		savedPosition.z = objecttoScene.ViewMatrix.mat[2][3];
-		objecttoScene.ViewMatrix.mat[0][3] = objecttoScene.ViewMatrix.mat[1][3] = objecttoScene.ViewMatrix.mat[2][3] = 0;
-		float xRatio = float(newMousePos.x - mousePos.x);
-		float yRatio = float(newMousePos.y - mousePos.y);
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(xRatio*.01f));
-		objecttoScene.ViewMatrix = MatrixMultMatrix(RotationX(yRatio*.01f), objecttoScene.ViewMatrix);
-		objecttoScene.ViewMatrix.mat[0][3] = savedPosition.x;
-		objecttoScene.ViewMatrix.mat[1][3] = savedPosition.y;
-		objecttoScene.ViewMatrix.mat[2][3] = savedPosition.z;
-	}
 	mousePos = newMousePos;
 #pragma endregion
 	sc->Present(0, 0);
