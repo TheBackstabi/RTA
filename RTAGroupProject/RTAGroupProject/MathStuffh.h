@@ -3,6 +3,14 @@
 struct Matrix
 {
 	float mat[4][4];
+	Matrix(){
+		for (int i = 0; i < 4; i++){
+			for (int j = 0; j < 4; j++){
+				mat[i][j] = 0;
+			}
+		}
+		mat[0][0] = mat[1][1] = mat[2][2] = mat[3][3] = 1;
+	}
 };
 struct Vertex
 {
@@ -208,6 +216,28 @@ Matrix RotationY(float radian)
 
 	return RotateMat;
 }
+
+Matrix MatrixTranslateX(float ratio)
+{
+	Matrix translationMatrix;
+	translationMatrix.mat[3][0] = ratio;
+	return translationMatrix;
+}
+
+Matrix MatrixTranslateY(float ratio)
+{
+	Matrix translationMatrix;
+	translationMatrix.mat[3][1] = ratio;
+	return translationMatrix;
+}
+
+Matrix MatrixTranslateZ(float ratio)
+{
+	Matrix translationMatrix;
+	translationMatrix.mat[3][2] = ratio;
+	return translationMatrix;
+}
+
 
 struct FLOAT2
 {

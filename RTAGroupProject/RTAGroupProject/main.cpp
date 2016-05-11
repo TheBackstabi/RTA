@@ -29,6 +29,8 @@ class RTAPROJECT
 	ID3D11Device *thedevice;
 	ID3D11RenderTargetView *RenTarView;
 	ID3D11Buffer *buffer;
+	ID3D11Buffer *buffertempobj;
+
 	unsigned int numverts = 0;
 	D3D11_BUFFER_DESC buffdesc;
 
@@ -85,10 +87,16 @@ public:
 	RTAPROJECT(HINSTANCE hinst, WNDPROC proc);
 	bool Run();
 	bool ShutDown();
-	HRESULT LoadFBX(string filePath,vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector, vector<unsigned int>& pOutIndiciesVector);
+	HRESULT LoadFBX(string filePath,vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector);
+
+	void WritetoBinary(string filename, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector);
+
+	void readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector);
+
+	void Loadfile(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector);
 };
 
-HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector, vector<unsigned int>& pOutIndiciesVector)
+HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector)
 {
 	if (fbxManager == nullptr)
 	{
@@ -165,7 +173,6 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 
 					pOutNormalVector.push_back(norm);
 
-					pOutIndiciesVector.push_back(iControlPointIndex);
 
 				}
 			}
@@ -208,6 +215,94 @@ void loadfromfile(string filepath, RTAPROJECT* tempthis)
 	}
 }
 
+void RTAPROJECT::WritetoBinary(string fbxfilenamenoextension, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector)
+{
+	fstream file;
+
+
+	file.open(fbxfilenamenoextension + ".RTAmesh", ios_base::binary | ios_base::out);
+	if (file.is_open())
+	{
+		unsigned int vertexvecsize = pinVertexVector.size();
+		file.write((char*)&vertexvecsize, sizeof(unsigned int));
+
+		for (unsigned int i = 0; i < pinVertexVector.size(); i++)
+		{
+			file.write((char*)&pinVertexVector[i], sizeof(MyVertex));
+		}
+
+		unsigned int normalvecsize = pinNormalVector.size();
+		file.write((char*)&normalvecsize, sizeof(unsigned int));
+
+		for (unsigned int i = 0; i < pinNormalVector.size(); i++)
+		{
+			file.write((char*)&pinNormalVector[i], sizeof(MyNormal));
+		}
+
+		unsigned int uvvvecsize = pinUVector.size();
+		file.write((char*)&uvvvecsize, sizeof(unsigned int));
+
+		for (unsigned int i = 0; i < pinUVector.size(); i++)
+		{
+			file.write((char*)&pinUVector[i], sizeof(MyUV));
+		}
+	}
+}
+
+void RTAPROJECT::readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector)
+{
+	fstream file;
+
+
+	file.open(filename + ".RTAmesh", ios_base::binary | ios_base::in);
+	if (file.is_open())
+	{
+		unsigned int vertexvecsize = 0;
+		file.read((char*)&vertexvecsize, sizeof(unsigned int));
+
+		pinVertexVector.resize(vertexvecsize);
+		for (unsigned int i = 0; i < vertexvecsize; i++)
+		{
+			file.read((char*)&pinVertexVector[i], sizeof(MyVertex));
+		}
+
+		unsigned int normalvecsize = 0;
+		file.read((char*)&normalvecsize, sizeof(unsigned int));
+		pinNormalVector.resize(normalvecsize);
+		for (unsigned int i = 0; i < pinNormalVector.size(); i++)
+		{
+			file.read((char*)&pinNormalVector[i], sizeof(MyNormal));
+		}
+
+		unsigned int uvvvecsize = 0;
+		file.read((char*)&uvvvecsize, sizeof(unsigned int));
+		pinUVector.resize(uvvvecsize);
+		for (unsigned int i = 0; i < pinUVector.size(); i++)
+		{
+			file.read((char*)&pinUVector[i], sizeof(MyUV));
+		}
+	}
+}
+
+void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector)
+{
+	fstream file;
+
+
+	file.open(filenamenoextension + ".RTAmesh", ios_base::binary | ios_base::in);
+	if (file.is_open())
+	{
+		readfromRTAmesh(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector);
+	}
+	else
+	{
+		string fullfilename = filenamenoextension += ".fbx";
+
+		LoadFBX(fullfilename, pinVertexVector, pinNormalVector, pinUVector);
+
+		WritetoBinary(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector);
+	}
+}
 RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 {
 
@@ -262,26 +357,40 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 
 	CreateDDSTextureFromFile(thedevice, L"cartoon_stone2_seamless.dds", NULL, &floorRSV[0]);
 
-	LoadFBX("Box_BindPose.fbx", vertexvec, normalvec, uvvec, indiciesvec);
+	Loadfile("Box_BindPose", vertexvec, normalvec, uvvec);
 	loadfromfile("Arwing_002.mesh", this);
-	size_t size = vertexvec.size();
+	size_t size = tempverts.size();
 	SIMPLE_VERTEX* loadedvertexes = new SIMPLE_VERTEX[size];
-	for (unsigned int i = 0; i < vertexvec.size(); i++)
+	for (unsigned int i = 0; i < tempverts.size(); i++)
 	{
-		
-		loadedvertexes[i].x = vertexvec[i].pos[0];
-		loadedvertexes[i].y = vertexvec[i].pos[1];
-		loadedvertexes[i].z = vertexvec[i].pos[2];
+		loadedvertexes[i].x = tempverts[i].fX;
+		loadedvertexes[i].y = tempverts[i].fY;
+		loadedvertexes[i].z = tempverts[i].fZ;
 		loadedvertexes[i].w = 1;
-		loadedvertexes[i].n = normalvec[i].normal[0];
-		loadedvertexes[i].r = normalvec[i].normal[1];
-		loadedvertexes[i].m = normalvec[i].normal[2];
-		loadedvertexes[i].u = uvvec[i].uv[0];
-		loadedvertexes[i].v = uvvec[i].uv[1];
+		loadedvertexes[i].n = tempverts[i].fNX;
+		loadedvertexes[i].r = tempverts[i].fNY;
+		loadedvertexes[i].m = tempverts[i].fNZ;
+		loadedvertexes[i].u = tempverts[i].fU;
+		loadedvertexes[i].v = tempverts[i].fV;
 	}
+	//size_t size = vertexvec.size();
+	//SIMPLE_VERTEX* loadedvertexes = new SIMPLE_VERTEX[size];
+	//for (unsigned int i = 0; i < vertexvec.size(); i++)
+	//{
 
-	unsigned int* loadedindicies =  new unsigned int[indiciesvec.size()];
-	for (unsigned int j = 0; j < indiciesvec.size(); j++)
+	//	loadedvertexes[i].x = vertexvec[i].pos[0];
+	//	loadedvertexes[i].y = vertexvec[i].pos[1];
+	//	loadedvertexes[i].z = vertexvec[i].pos[2];
+	//	loadedvertexes[i].w = 1;
+	//	loadedvertexes[i].n = normalvec[i].normal[0];
+	//	loadedvertexes[i].r = normalvec[i].normal[1];
+	//	loadedvertexes[i].m = normalvec[i].normal[2];
+	//	loadedvertexes[i].u = uvvec[i].uv[0];
+	//	loadedvertexes[i].v = uvvec[i].uv[1];
+	//}
+
+	unsigned int* loadedindicies =  new unsigned int[temptriangle.size()];
+	for (unsigned int j = 0; j < temptriangle.size(); j++)
 	{
 		loadedindicies[j] = temptriangle[j];
 	}
@@ -303,7 +412,7 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	ZeroMemory(&buffdesc, sizeof(buffdesc));
 
 	buffdesc.Usage = D3D11_USAGE_IMMUTABLE;
-	buffdesc.ByteWidth = sizeof(SIMPLE_VERTEX) * vertexvec.size();
+	buffdesc.ByteWidth = sizeof(SIMPLE_VERTEX) * tempverts.size();
 	buffdesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	buffdesc.CPUAccessFlags = NULL;
 
@@ -317,7 +426,7 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	ZeroMemory(&Indexbufferdesc, sizeof(Indexbufferdesc));
 
 	Indexbufferdesc.Usage = D3D11_USAGE_IMMUTABLE;
-	Indexbufferdesc.ByteWidth = sizeof(unsigned int) * indiciesvec.size();
+	Indexbufferdesc.ByteWidth = sizeof(unsigned int) * temptriangle.size();
 	Indexbufferdesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 	Indexbufferdesc.CPUAccessFlags = NULL;
 
@@ -387,51 +496,46 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 
 bool RTAPROJECT::Run()
 {
+#pragma region
 	POINT newMousePos = mousePos;
 	GetCursorPos(&newMousePos);
 	sc->GetDesc(&SwapChainDescVar);
-	
+
 	XMStoreFloat4x4((XMFLOAT4X4*)&objecttoScene.ProjectionMatrix, XMMatrixPerspectiveFovLH(3.14f / 3.0f, (((float)SwapChainDescVar.BufferDesc.Width / 2) / (float)SwapChainDescVar.BufferDesc.Height), 0.1f, 1000.0f));
 
+	const float ColorRGBA[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
+	thedevicecontext->ClearRenderTargetView(RenTarView, ColorRGBA);
+
+	thedevicecontext->ClearDepthStencilView(pDSV, D3D11_CLEAR_DEPTH, 1, NULL);
+
+	thedevicecontext->OMSetRenderTargets(1, &RenTarView, pDSV);
+	thedevicecontext->RSSetViewports(1, &vp);
 	if (GetAsyncKeyState('W'))
 	{
 		translateparam = .01f;
-		objecttoScene.ViewMatrix.mat[3][2] += translateparam;
-
-
-
+		objecttoScene.ViewMatrix = MatrixMultMatrix(MatrixTranslateZ(translateparam), objecttoScene.ViewMatrix);
 	}
 	if (GetAsyncKeyState('S'))
 	{
 		translateparam = .01f;
-
-		objecttoScene.ViewMatrix.mat[3][2] -= translateparam;
-
-
+		objecttoScene.ViewMatrix = MatrixMultMatrix(MatrixTranslateZ(-translateparam), objecttoScene.ViewMatrix);
 
 	}
 	if (GetAsyncKeyState('A'))
 	{
 		translateparam = .01f;
-
-		objecttoScene.ViewMatrix.mat[3][0] -= translateparam;
-
-
+		objecttoScene.ViewMatrix = MatrixMultMatrix(MatrixTranslateX(-translateparam), objecttoScene.ViewMatrix);
 
 	}
 	if (GetAsyncKeyState('D'))
 	{
 		translateparam = .01f;
-		objecttoScene.ViewMatrix.mat[3][0] += translateparam;
-
-
-
+		objecttoScene.ViewMatrix = MatrixMultMatrix(MatrixTranslateX(translateparam), objecttoScene.ViewMatrix);
 	}
 	if (GetAsyncKeyState('Q'))
 	{
 		translateparam = .01f;
 		objecttoScene.ViewMatrix.mat[3][1] += translateparam;
-
 	}
 	if (GetAsyncKeyState('E'))
 	{
@@ -439,44 +543,20 @@ bool RTAPROJECT::Run()
 		objecttoScene.ViewMatrix.mat[3][1] -= translateparam;
 
 	}
-	if (GetAsyncKeyState(VK_DOWN))
-	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(-.001f));
-	}
-	if (GetAsyncKeyState(VK_UP))
-	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationX(.001f));
-	}
-	if (GetAsyncKeyState(VK_LEFT))
-	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(.001f));
-	}
-	if (GetAsyncKeyState(VK_RIGHT))
-	{
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(-.001f));
-	}
 	if (GetAsyncKeyState(VK_RBUTTON) || GetAsyncKeyState(VK_LBUTTON)){
 		FLOAT3 savedPosition;
-		savedPosition.x = objecttoScene.ViewMatrix.mat[0][3];
-		savedPosition.y = objecttoScene.ViewMatrix.mat[1][3];
-		savedPosition.z = objecttoScene.ViewMatrix.mat[2][3];
-		objecttoScene.ViewMatrix.mat[0][3] = objecttoScene.ViewMatrix.mat[1][3] = objecttoScene.ViewMatrix.mat[2][3] = 0;
+		savedPosition.x = objecttoScene.ViewMatrix.mat[3][0];
+		savedPosition.y = objecttoScene.ViewMatrix.mat[3][1];
+		savedPosition.z = objecttoScene.ViewMatrix.mat[3][2];
+		objecttoScene.ViewMatrix.mat[3][0] = objecttoScene.ViewMatrix.mat[3][1] = objecttoScene.ViewMatrix.mat[3][2] = 0;
 		float xRatio = float(newMousePos.x - mousePos.x);
 		float yRatio = float(newMousePos.y - mousePos.y);
-		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(-xRatio*.01f));
 		objecttoScene.ViewMatrix = MatrixMultMatrix(RotationX(-yRatio*.01f), objecttoScene.ViewMatrix);
-		objecttoScene.ViewMatrix.mat[0][3] = savedPosition.x;
-		objecttoScene.ViewMatrix.mat[1][3] = savedPosition.y;
-		objecttoScene.ViewMatrix.mat[2][3] = savedPosition.z;
+		objecttoScene.ViewMatrix = MatrixMultMatrix(objecttoScene.ViewMatrix, RotationY(-xRatio*.01f));
+		objecttoScene.ViewMatrix.mat[3][0] = savedPosition.x;
+		objecttoScene.ViewMatrix.mat[3][1] = savedPosition.y;
+		objecttoScene.ViewMatrix.mat[3][2] = savedPosition.z;
 	}
-	const float ColorRGBA[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
-	thedevicecontext->ClearRenderTargetView(RenTarView, ColorRGBA);
-
-	thedevicecontext->ClearDepthStencilView(pDSV, D3D11_CLEAR_DEPTH, 1, NULL);
-
-	thedevicecontext->OMSetRenderTargets(1,  &RenTarView,   pDSV);    
-	thedevicecontext->RSSetViewports(1, &vp);
-
 #pragma region ObjectDrawCall
 	thedevicecontext->Map(constbuffer, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &Mapsubres);
 
@@ -484,10 +564,11 @@ bool RTAPROJECT::Run()
 
 	thedevicecontext->Unmap(constbuffer, NULL);
 	thedevicecontext->Map(constbuffer2, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &Mapsubres2);
-	Matrix savedView = objecttoScene.ViewMatrix;
+	Matrix savedViewMatrix = objecttoScene.ViewMatrix;
 	SpecialCaseMatInverse(objecttoScene.ViewMatrix);
 	memcpy(Mapsubres2.pData, &objecttoScene, sizeof(objecttoScene));
-	objecttoScene.ViewMatrix = savedView;
+	objecttoScene.ViewMatrix = savedViewMatrix;
+
 	thedevicecontext->Unmap(constbuffer2, NULL);
 	thedevicecontext->VSSetConstantBuffers(0, 1, &constbuffer);
 	thedevicecontext->VSSetConstantBuffers(1, 1, &constbuffer2);
@@ -500,11 +581,9 @@ bool RTAPROJECT::Run()
 	thedevicecontext->PSSetShaderResources(0, 1, &floorRSV[0]);
 	thedevicecontext->IASetInputLayout(InputLayout);
 	thedevicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	//thedevicecontext->DrawIndexed(indiciesvec.size(), 0, 0);
-	thedevicecontext->Draw(vertexvec.size(), 0);
-
+	thedevicecontext->DrawIndexed(temptriangle.size(), 0, 0);
+	//thedevicecontext->Draw(vertexvec.size(), 0);
 	mousePos = newMousePos;
-#pragma endregion
 	sc->Present(0, 0);
 
 	return true;
