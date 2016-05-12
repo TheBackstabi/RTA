@@ -355,39 +355,39 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 
 	sc->GetDesc(&SwapChainDescVar);
 
-	CreateDDSTextureFromFile(thedevice, L"cartoon_stone2_seamless.dds", NULL, &floorRSV[0]);
+	CreateDDSTextureFromFile(thedevice, L"TestCube.dds", NULL, &floorRSV[0]);
 
 	Loadfile("Box_BindPose", vertexvec, normalvec, uvvec);
 	loadfromfile("Arwing_002.mesh", this);
-	size_t size = tempverts.size();
-	SIMPLE_VERTEX* loadedvertexes = new SIMPLE_VERTEX[size];
-	for (unsigned int i = 0; i < tempverts.size(); i++)
-	{
-		loadedvertexes[i].x = tempverts[i].fX;
-		loadedvertexes[i].y = tempverts[i].fY;
-		loadedvertexes[i].z = tempverts[i].fZ;
-		loadedvertexes[i].w = 1;
-		loadedvertexes[i].n = tempverts[i].fNX;
-		loadedvertexes[i].r = tempverts[i].fNY;
-		loadedvertexes[i].m = tempverts[i].fNZ;
-		loadedvertexes[i].u = tempverts[i].fU;
-		loadedvertexes[i].v = tempverts[i].fV;
-	}
-	//size_t size = vertexvec.size();
+	//size_t size = tempverts.size();
 	//SIMPLE_VERTEX* loadedvertexes = new SIMPLE_VERTEX[size];
-	//for (unsigned int i = 0; i < vertexvec.size(); i++)
+	//for (unsigned int i = 0; i < tempverts.size(); i++)
 	//{
-
-	//	loadedvertexes[i].x = vertexvec[i].pos[0];
-	//	loadedvertexes[i].y = vertexvec[i].pos[1];
-	//	loadedvertexes[i].z = vertexvec[i].pos[2];
+	//	loadedvertexes[i].x = tempverts[i].fX;
+	//	loadedvertexes[i].y = tempverts[i].fY;
+	//	loadedvertexes[i].z = tempverts[i].fZ;
 	//	loadedvertexes[i].w = 1;
-	//	loadedvertexes[i].n = normalvec[i].normal[0];
-	//	loadedvertexes[i].r = normalvec[i].normal[1];
-	//	loadedvertexes[i].m = normalvec[i].normal[2];
-	//	loadedvertexes[i].u = uvvec[i].uv[0];
-	//	loadedvertexes[i].v = uvvec[i].uv[1];
+	//	loadedvertexes[i].n = tempverts[i].fNX;
+	//	loadedvertexes[i].r = tempverts[i].fNY;
+	//	loadedvertexes[i].m = tempverts[i].fNZ;
+	//	loadedvertexes[i].u = tempverts[i].fU;
+	//	loadedvertexes[i].v = tempverts[i].fV;
 	//}
+	size_t size = vertexvec.size();
+	SIMPLE_VERTEX* loadedvertexes = new SIMPLE_VERTEX[size];
+	for (unsigned int i = 0; i < vertexvec.size(); i++)
+	{
+
+		loadedvertexes[i].x = vertexvec[i].pos[0];
+		loadedvertexes[i].y = vertexvec[i].pos[1];
+		loadedvertexes[i].z = vertexvec[i].pos[2];
+		loadedvertexes[i].w = 1;
+		loadedvertexes[i].n = normalvec[i].normal[0];
+		loadedvertexes[i].r = normalvec[i].normal[1];
+		loadedvertexes[i].m = normalvec[i].normal[2];
+		loadedvertexes[i].u = uvvec[i].uv[0];
+		loadedvertexes[i].v = uvvec[i].uv[1];
+	}
 
 	unsigned int* loadedindicies =  new unsigned int[temptriangle.size()];
 	for (unsigned int j = 0; j < temptriangle.size(); j++)
@@ -412,7 +412,7 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	ZeroMemory(&buffdesc, sizeof(buffdesc));
 
 	buffdesc.Usage = D3D11_USAGE_IMMUTABLE;
-	buffdesc.ByteWidth = sizeof(SIMPLE_VERTEX) * tempverts.size();
+	buffdesc.ByteWidth = sizeof(SIMPLE_VERTEX) * vertexvec.size();
 	buffdesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	buffdesc.CPUAccessFlags = NULL;
 
@@ -501,7 +501,7 @@ bool RTAPROJECT::Run()
 	GetCursorPos(&newMousePos);
 	sc->GetDesc(&SwapChainDescVar);
 
-	XMStoreFloat4x4((XMFLOAT4X4*)&objecttoScene.ProjectionMatrix, XMMatrixPerspectiveFovLH(3.14f / 3.0f, (((float)SwapChainDescVar.BufferDesc.Width / 2) / (float)SwapChainDescVar.BufferDesc.Height), 0.1f, 1000.0f));
+	XMStoreFloat4x4((XMFLOAT4X4*)&objecttoScene.ProjectionMatrix, XMMatrixPerspectiveFovLH(3.14f / 3.0f, (((float)SwapChainDescVar.BufferDesc.Width) / (float)SwapChainDescVar.BufferDesc.Height), 0.1f, 1000.0f));
 
 	const float ColorRGBA[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
 	thedevicecontext->ClearRenderTargetView(RenTarView, ColorRGBA);
@@ -581,8 +581,8 @@ bool RTAPROJECT::Run()
 	thedevicecontext->PSSetShaderResources(0, 1, &floorRSV[0]);
 	thedevicecontext->IASetInputLayout(InputLayout);
 	thedevicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	thedevicecontext->DrawIndexed(temptriangle.size(), 0, 0);
-	//thedevicecontext->Draw(vertexvec.size(), 0);
+	//thedevicecontext->DrawIndexed(temptriangle.size(), 0, 0);
+	thedevicecontext->Draw(vertexvec.size(), 0);
 	mousePos = newMousePos;
 	sc->Present(0, 0);
 
