@@ -71,10 +71,16 @@ public:
 	{
 		float normal[3];
 	};
+	struct KeyFrames
+	{
+		Matrix transform;
+		float keyTime;
+	};
 	vector<MyVertex> vertexvec;
 	vector<MyNormal> normalvec;
 	vector<MyUV> uvvec;
 	vector<unsigned int> indiciesvec;
+	vector<Matrix> keyFrames;
 	SEND_TO_VRAM toShader;
 	ID3D11InputLayout *InputLayout;
 	SEND_TO_OBJECT objecttoObject;
@@ -84,7 +90,7 @@ public:
 	D3D11_MAPPED_SUBRESOURCE Mapsubres2;
 	vector<tVertex> tempverts;
 	vector<unsigned int> temptriangle;
-
+	FbxScene* pFbxScene;
 	RTAPROJECT(HINSTANCE hinst, WNDPROC proc);
 	bool Run();
 	bool ShutDown();
@@ -95,8 +101,103 @@ public:
 	void readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector);
 
 	void Loadfile(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector);
+	void LoadNodeKeyframeAnimation(FbxNode* fbxNode);
 };
 
+void RTAPROJECT::LoadNodeKeyframeAnimation(FbxNode* fbxNode)
+{
+	bool isAnimated = false;
+
+	// Iterate all animations (for example, walking, running, falling and etc.)
+	int numAnimations = pFbxScene->GetSrcObjectCount<FbxAnimStack>();
+	for (int animationIndex = 0; animationIndex < numAnimations; animationIndex++)
+	{
+		FbxAnimStack *animStack = (FbxAnimStack*)pFbxScene->GetSrcObject<FbxAnimStack>(animationIndex);
+		FbxAnimEvaluator *animEvaluator = pFbxScene->GetAnimationEvaluator();
+		animStack->GetName(); // Get the name of the animation if needed
+
+		// Iterate all the transformation layers of the animation. You can have several layers, for example one for translation, one for rotation, one for scaling and each can have keys at different frame numbers.
+		int numLayers = animStack->GetMemberCount();
+		for (int layerIndex = 0; layerIndex < numLayers; layerIndex++)
+		{
+			FbxAnimLayer *animLayer = (FbxAnimLayer*)animStack->GetMember(layerIndex);
+			animLayer->GetName(); // Get the layer's name if needed
+
+			FbxAnimCurve *translationCurve = fbxNode->LclTranslation.GetCurve(animLayer);
+			FbxAnimCurve *rotationCurve = fbxNode->LclRotation.GetCurve(animLayer);
+			FbxAnimCurve *scalingCurve = fbxNode->LclScaling.GetCurve(animLayer);
+
+			if (scalingCurve != NULL)
+			{
+				int numKeys = scalingCurve->KeyGetCount();
+				for (int keyIndex = 0; keyIndex < numKeys; keyIndex++)
+				{
+					FbxTime frameTime = scalingCurve->KeyGetTime(keyIndex);
+					FbxDouble3 scalingVector = fbxNode->EvaluateLocalScaling(frameTime);
+					float xscale = (float)scalingVector[0];
+					float yscale = (float)scalingVector[1];
+					float zscale = (float)scalingVector[2];
+
+					float frameSeconds = (float)frameTime.GetSecondDouble(); // If needed, get the time of the scaling keyframe, in seconds
+				}
+			}
+			else
+			{
+				// If this animation layer has no scaling curve, then use the default one, if needed
+				FbxDouble3 scalingVector = fbxNode->LclScaling.Get();
+				float xscale = (float)scalingVector[0];
+				float yscale = (float)scalingVector[1];
+				float zscale = (float)scalingVector[2];
+			}
+
+			if (rotationCurve != NULL)
+			{
+				int numKeys = rotationCurve->KeyGetCount();
+				for (int index = 0; index < numKeys; index++)
+				{
+					FbxTime frameTime = rotationCurve->KeyGetTime(index);
+					FbxDouble3 rotationVector = fbxNode->EvaluateLocalScaling(frameTime);
+					float xrotation = (float)rotationVector[0];
+					float yrotation = (float)rotationVector[1];
+					float zrotation = (float)rotationVector[2];
+
+					float frameSeconds = (float)frameTime.GetSecondDouble();
+				}
+			}
+			else
+			{
+				FbxDouble3 rotationVector = fbxNode->LclScaling.Get();
+				float xrotation = (float)rotationVector[0];
+				float yrotation = (float)rotationVector[1];
+				float zrotation = (float)rotationVector[2];
+			}
+			if (translationCurve != NULL)
+			{
+				int numKeys = translationCurve->KeyGetCount();
+				for (int index = 0; index < numKeys; index++)
+				{
+					FbxTime frameTime = translationCurve->KeyGetTime(index);
+					FbxDouble3 translationVector = fbxNode->EvaluateLocalScaling(frameTime);
+					float xtranslation = (float)translationVector[0];
+					float ytranslation = (float)translationVector[1];
+					float ztranslation = (float)translationVector[2];
+
+					float frameSeconds = (float)frameTime.GetSecondDouble();
+				}
+			}
+			else
+			{
+				FbxDouble3 translationVector = fbxNode->LclScaling.Get();
+				float xtranslation = (float)translationVector[0];
+				float ytranslation = (float)translationVector[1];
+				float ztranslation = (float)translationVector[2];
+			}
+
+
+			
+		}
+	}
+}
 HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector)
 {
 	if (fbxManager == nullptr)
@@ -108,7 +209,7 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 	}
 
 	FbxImporter* pImporter = FbxImporter::Create(fbxManager, "");
-	FbxScene* pFbxScene = FbxScene::Create(fbxManager, "");
+	pFbxScene = FbxScene::Create(fbxManager, "");
 
 	bool bSuccess = pImporter->Initialize(filePath.c_str(), -1, fbxManager->GetIOSettings());
 	if (!bSuccess) return E_FAIL;
@@ -169,9 +270,9 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 					MyNormal norm;
 					FbxVector4 fbxNormal;
 					bool result = pMesh->GetPolygonVertexNormal(j, k, fbxNormal);
-					norm.normal[0] = fbxNormal.mData[0];
-					norm.normal[1] = fbxNormal.mData[1];
-					norm.normal[2] = fbxNormal.mData[2];
+					norm.normal[0] = (float)fbxNormal.mData[0];
+					norm.normal[1] = (float)fbxNormal.mData[1];
+					norm.normal[2] = (float)fbxNormal.mData[2];
 
 					pOutNormalVector.push_back(norm);
 
@@ -248,7 +349,7 @@ void RTAPROJECT::WritetoBinary(string fbxfilenamenoextension, vector<MyVertex>& 
 	file.open(fbxfilenamenoextension + ".RTAmesh", ios_base::binary | ios_base::out);
 	if (file.is_open())
 	{
-		unsigned int vertexvecsize = pinVertexVector.size();
+		size_t vertexvecsize = pinVertexVector.size();
 		file.write((char*)&vertexvecsize, sizeof(unsigned int));
 
 		for (unsigned int i = 0; i < pinVertexVector.size(); i++)
@@ -256,7 +357,7 @@ void RTAPROJECT::WritetoBinary(string fbxfilenamenoextension, vector<MyVertex>& 
 			file.write((char*)&pinVertexVector[i], sizeof(MyVertex));
 		}
 
-		unsigned int normalvecsize = pinNormalVector.size();
+		size_t normalvecsize = pinNormalVector.size();
 		file.write((char*)&normalvecsize, sizeof(unsigned int));
 
 		for (unsigned int i = 0; i < pinNormalVector.size(); i++)
@@ -264,7 +365,7 @@ void RTAPROJECT::WritetoBinary(string fbxfilenamenoextension, vector<MyVertex>& 
 			file.write((char*)&pinNormalVector[i], sizeof(MyNormal));
 		}
 
-		unsigned int uvvvecsize = pinUVector.size();
+		size_t uvvvecsize = pinUVector.size();
 		file.write((char*)&uvvvecsize, sizeof(unsigned int));
 
 		for (unsigned int i = 0; i < pinUVector.size(); i++)
