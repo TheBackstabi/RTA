@@ -88,16 +88,16 @@ public:
 	RTAPROJECT(HINSTANCE hinst, WNDPROC proc);
 	bool Run();
 	bool ShutDown();
-	HRESULT LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector);
+	HRESULT LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector, string& filepath);
 
-	void WritetoBinary(string filename, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector);
+	void WritetoBinary(string filename, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector, string& filepath);
 
-	void readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector);
+	void readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath);
 
-	void Loadfile(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector);
+	void Loadfile(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath);
 };
 
-HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector)
+HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector, string& filepath)
 {
 	if (fbxManager == nullptr)
 	{
@@ -157,6 +157,7 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 					pMesh->GetPolygonVertexUV(j, k, uvStringList.GetStringAt(0), uvCoords, unmapped);
 					uv.uv[0] = static_cast<float>(uvCoords[0]);
 					uv.uv[1] = static_cast<float>(uvCoords[1]);
+					uv.uv[1] = 1 - uv.uv[1];
 					pOutUVector.push_back(uv);
 
 					MyVertex vertex;
@@ -185,18 +186,18 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 				FbxSurfaceMaterial *material = (FbxSurfaceMaterial*)pFbxChildNode->GetSrcObject<FbxSurfaceMaterial>(index);
 				if (material)
 				{
-					// This only gets the material of type sDiffuse, you probably need to traverse all Standard Material Property by its name to get all possible textures.
 					FbxProperty prop = material->FindProperty(FbxSurfaceMaterial::sDiffuse);
 
-
 					// Directly get textures
-					
 					int texture_count = prop.GetSrcObjectCount<FbxTexture>();
 					for (int j = 0; j < texture_count; j++)
 					{
-						const FbxTexture* texture = FbxCast<FbxTexture>(prop.GetSrcObject<FbxTexture>(j));
+						const FbxTexture* texture = FbxCast<FbxTexture>(prop.GetSrcObject<FbxFileTexture>(j));
 						// Then, you can get all the properties of the texture, include its name
-						const char* texture_name = texture->GetName();
+						
+						const char* texture_name = FbxCast<FbxFileTexture>(texture)->GetFileName();
+
+						filepath = texture_name;
 					}
 
 				}
@@ -240,7 +241,7 @@ void loadfromfile(string filepath, RTAPROJECT* tempthis)
 	}
 }
 
-void RTAPROJECT::WritetoBinary(string fbxfilenamenoextension, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector)
+void RTAPROJECT::WritetoBinary(string fbxfilenamenoextension, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath)
 {
 	fstream file;
 
@@ -248,6 +249,10 @@ void RTAPROJECT::WritetoBinary(string fbxfilenamenoextension, vector<MyVertex>& 
 	file.open(fbxfilenamenoextension + ".RTAmesh", ios_base::binary | ios_base::out);
 	if (file.is_open())
 	{
+		unsigned int strlen = filepath.size();
+		file.write((char*)&strlen, sizeof(unsigned int));
+
+		file.write(&filepath[0], strlen);
 		unsigned int vertexvecsize = pinVertexVector.size();
 		file.write((char*)&vertexvecsize, sizeof(unsigned int));
 
@@ -274,7 +279,7 @@ void RTAPROJECT::WritetoBinary(string fbxfilenamenoextension, vector<MyVertex>& 
 	}
 }
 
-void RTAPROJECT::readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector)
+void RTAPROJECT::readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath)
 {
 	fstream file;
 
@@ -282,6 +287,10 @@ void RTAPROJECT::readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVec
 	file.open(filename + ".RTAmesh", ios_base::binary | ios_base::in);
 	if (file.is_open())
 	{
+		unsigned int strlen = 0;
+		file.read((char*)&strlen, sizeof(unsigned int));
+		filepath.resize(strlen);
+		file.read(&filepath[0], strlen);
 		unsigned int vertexvecsize = 0;
 		file.read((char*)&vertexvecsize, sizeof(unsigned int));
 
@@ -309,7 +318,7 @@ void RTAPROJECT::readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVec
 	}
 }
 
-void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector)
+void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath)
 {
 	fstream file;
 
@@ -317,15 +326,15 @@ void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVerte
 	file.open(filenamenoextension + ".RTAmesh", ios_base::binary | ios_base::in);
 	if (file.is_open())
 	{
-		readfromRTAmesh(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector);
+		readfromRTAmesh(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath);
 	}
 	else
 	{
-		string fullfilename = filenamenoextension += ".fbx";
+		string fullfilename = filenamenoextension + ".fbx";
 
-		LoadFBX(fullfilename, pinVertexVector, pinNormalVector, pinUVector);
+		LoadFBX(fullfilename, pinVertexVector, pinNormalVector, pinUVector, filepath);
 
-		WritetoBinary(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector);
+		WritetoBinary(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath);
 	}
 }
 RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
@@ -380,18 +389,18 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 
 	sc->GetDesc(&SwapChainDescVar);
 
-	CreateDDSTextureFromFile(thedevice, L"TestCube.dds", NULL, &floorRSV[0]);
-	//string thing;
-	//const char * tempthing = "Box_BindPose.fbm\\";
-	//thing = tempthing;
-	//wstring tempstring(thing.begin(), thing.end());
+	string thepath;
+	
+	Loadfile("Teddy_Idle", vertexvec, normalvec, uvvec, thepath);
 
-	////wstring tempstring =  L"Box_BindPose.fbm\\";
-	//tempstring += L"TestCube.jpg";
-	//const wchar_t* szName = tempstring.c_str();
-	//CreateWICTextureFromFile(thedevice, szName, NULL, &floorRSV[0]);
-	Loadfile("Box_BindPose", vertexvec, normalvec, uvvec);
-	loadfromfile("Arwing_002.mesh", this);
+	wstring tempstring(thepath.begin(), thepath.end());
+	const wchar_t* szName = tempstring.c_str();
+	//Use CreateWICTextureFromFile for anything that isn't a .dds
+	//Use CreateDDSTextureFromFile for .dds files (duh)
+	CreateWICTextureFromFile(thedevice, szName, NULL, &floorRSV[0]);
+	//CreateDDSTextureFromFile(thedevice, szName, NULL, &floorRSV[0]);
+#pragma region .MESH fileloading
+	//loadfromfile("Arwing_002.mesh", this);
 	//size_t size = tempverts.size();
 	//SIMPLE_VERTEX* loadedvertexes = new SIMPLE_VERTEX[size];
 	//for (unsigned int i = 0; i < tempverts.size(); i++)
@@ -406,6 +415,7 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	//	loadedvertexes[i].u = tempverts[i].fU;
 	//	loadedvertexes[i].v = tempverts[i].fV;
 	//}
+#pragma endregion
 	size_t size = vertexvec.size();
 	SIMPLE_VERTEX* loadedvertexes = new SIMPLE_VERTEX[size];
 	for (unsigned int i = 0; i < vertexvec.size(); i++)
@@ -543,36 +553,32 @@ bool RTAPROJECT::Run()
 
 	thedevicecontext->OMSetRenderTargets(1, &RenTarView, pDSV);
 	thedevicecontext->RSSetViewports(1, &vp);
+	translateparam = .1f;
+
 	if (GetAsyncKeyState('W'))
 	{
-		translateparam = .01f;
 		objecttoScene.ViewMatrix = MatrixMultMatrix(MatrixTranslateZ(translateparam), objecttoScene.ViewMatrix);
 	}
 	if (GetAsyncKeyState('S'))
 	{
-		translateparam = .01f;
 		objecttoScene.ViewMatrix = MatrixMultMatrix(MatrixTranslateZ(-translateparam), objecttoScene.ViewMatrix);
 
 	}
 	if (GetAsyncKeyState('A'))
 	{
-		translateparam = .01f;
 		objecttoScene.ViewMatrix = MatrixMultMatrix(MatrixTranslateX(-translateparam), objecttoScene.ViewMatrix);
 
 	}
 	if (GetAsyncKeyState('D'))
 	{
-		translateparam = .01f;
 		objecttoScene.ViewMatrix = MatrixMultMatrix(MatrixTranslateX(translateparam), objecttoScene.ViewMatrix);
 	}
 	if (GetAsyncKeyState('Q'))
 	{
-		translateparam = .01f;
 		objecttoScene.ViewMatrix.mat[3][1] += translateparam;
 	}
 	if (GetAsyncKeyState('E'))
 	{
-		translateparam = .01f;
 		objecttoScene.ViewMatrix.mat[3][1] -= translateparam;
 
 	}
