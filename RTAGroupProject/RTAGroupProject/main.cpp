@@ -8,6 +8,7 @@
 #include <dxgi1_2.h>
 #include "MathStuffh.h"
 #include "DDSTextureLoader.h"
+#include "WICTextureLoader.h"
 #include "VertexShader.csh"
 #include "PixelShader.csh"
 #include <fbxsdk.h>
@@ -87,7 +88,7 @@ public:
 	RTAPROJECT(HINSTANCE hinst, WNDPROC proc);
 	bool Run();
 	bool ShutDown();
-	HRESULT LoadFBX(string filePath,vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector);
+	HRESULT LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector);
 
 	void WritetoBinary(string filename, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector);
 
@@ -121,7 +122,8 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 
 	if (pFbxRootNode)
 	{
-		for (int i = 0; i < pFbxRootNode->GetChildCount(); i++)
+		int childcount = pFbxRootNode->GetChildCount();
+		for (int i = 0; i < childcount; i++)
 		{
 			FbxNode* pFbxChildNode = pFbxRootNode->GetChild(i);
 
@@ -134,25 +136,25 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 				continue;
 
 			FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
-
+			
 			FbxVector4* pVertices = pMesh->GetControlPoints();
 			bool unmapped;
 			for (int j = 0; j < pMesh->GetPolygonCount(); j++)
 			{
 				int iNumVertices = pMesh->GetPolygonSize(j);
 				assert(iNumVertices == 3);
-				
+
 				for (int k = 0; k < iNumVertices; k++)
 				{
 					int iControlPointIndex = pMesh->GetPolygonVertex(j, k);
-						
+
 
 					MyUV uv;
 					FbxVector2 uvCoords;
 					FbxStringList uvStringList;
 					pMesh->GetUVSetNames(uvStringList);
-					
-					pMesh->GetPolygonVertexUV(j, k, uvStringList.GetStringAt(0), uvCoords,unmapped);
+
+					pMesh->GetPolygonVertexUV(j, k, uvStringList.GetStringAt(0), uvCoords, unmapped);
 					uv.uv[0] = static_cast<float>(uvCoords[0]);
 					uv.uv[1] = static_cast<float>(uvCoords[1]);
 					pOutUVector.push_back(uv);
@@ -163,7 +165,7 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 					vertex.pos[2] = (float)pVertices[iControlPointIndex].mData[2];
 					pOutVertexVector.push_back(vertex);
 
-					
+
 					MyNormal norm;
 					FbxVector4 fbxNormal;
 					bool result = pMesh->GetPolygonVertexNormal(j, k, fbxNormal);
@@ -173,6 +175,29 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 
 					pOutNormalVector.push_back(norm);
 
+
+				}
+			}
+
+			int mcount = pFbxChildNode->GetSrcObjectCount<FbxSurfaceMaterial>();
+			for (int index = 0; index < mcount; index++)
+			{
+				FbxSurfaceMaterial *material = (FbxSurfaceMaterial*)pFbxChildNode->GetSrcObject<FbxSurfaceMaterial>(index);
+				if (material)
+				{
+					// This only gets the material of type sDiffuse, you probably need to traverse all Standard Material Property by its name to get all possible textures.
+					FbxProperty prop = material->FindProperty(FbxSurfaceMaterial::sDiffuse);
+
+
+					// Directly get textures
+					
+					int texture_count = prop.GetSrcObjectCount<FbxTexture>();
+					for (int j = 0; j < texture_count; j++)
+					{
+						const FbxTexture* texture = FbxCast<FbxTexture>(prop.GetSrcObject<FbxTexture>(j));
+						// Then, you can get all the properties of the texture, include its name
+						const char* texture_name = texture->GetName();
+					}
 
 				}
 			}
@@ -356,7 +381,15 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	sc->GetDesc(&SwapChainDescVar);
 
 	CreateDDSTextureFromFile(thedevice, L"TestCube.dds", NULL, &floorRSV[0]);
+	//string thing;
+	//const char * tempthing = "Box_BindPose.fbm\\";
+	//thing = tempthing;
+	//wstring tempstring(thing.begin(), thing.end());
 
+	////wstring tempstring =  L"Box_BindPose.fbm\\";
+	//tempstring += L"TestCube.jpg";
+	//const wchar_t* szName = tempstring.c_str();
+	//CreateWICTextureFromFile(thedevice, szName, NULL, &floorRSV[0]);
 	Loadfile("Box_BindPose", vertexvec, normalvec, uvvec);
 	loadfromfile("Arwing_002.mesh", this);
 	//size_t size = tempverts.size();
@@ -389,7 +422,7 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 		loadedvertexes[i].v = uvvec[i].uv[1];
 	}
 
-	unsigned int* loadedindicies =  new unsigned int[temptriangle.size()];
+	unsigned int* loadedindicies = new unsigned int[temptriangle.size()];
 	for (unsigned int j = 0; j < temptriangle.size(); j++)
 	{
 		loadedindicies[j] = temptriangle[j];
@@ -490,7 +523,7 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	texdsv.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
 	texdsv.Texture2D.MipSlice = 0;
 
-	hr = thedevice->CreateDepthStencilView(pDepthStencil,&texdsv,&pDSV); 
+	hr = thedevice->CreateDepthStencilView(pDepthStencil, &texdsv, &pDSV);
 
 }
 
@@ -637,68 +670,68 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 	case (WM_DESTROY) : { PostQuitMessage(0); }
 						break;
-	//case WM_SIZE:
-		//if (sc)
-		//{
-		//	thedevicecontext->OMSetRenderTargets(0, 0, 0);
+						//case WM_SIZE:
+						//if (sc)
+						//{
+						//	thedevicecontext->OMSetRenderTargets(0, 0, 0);
 
-		//	thedevicecontext->ClearState();
+						//	thedevicecontext->ClearState();
 
-		//	RenTarView->Release();
+						//	RenTarView->Release();
 
-		//	HRESULT hr;
-		//	unsigned int w = LOWORD(lParam);
-		//	unsigned int h = HIWORD(lParam);
-		//	hr = sc->ResizeBuffers(0, w, h, DXGI_FORMAT_UNKNOWN, 0);
+						//	HRESULT hr;
+						//	unsigned int w = LOWORD(lParam);
+						//	unsigned int h = HIWORD(lParam);
+						//	hr = sc->ResizeBuffers(0, w, h, DXGI_FORMAT_UNKNOWN, 0);
 
-		//	DXGI_SWAP_CHAIN_DESC SwapChainDesc;
+						//	DXGI_SWAP_CHAIN_DESC SwapChainDesc;
 
-		//	ZeroMemory(&SwapChainDesc, sizeof(SwapChainDesc));
+						//	ZeroMemory(&SwapChainDesc, sizeof(SwapChainDesc));
 
-		//	sc->GetDesc(&SwapChainDesc);
+						//	sc->GetDesc(&SwapChainDesc);
 
-		//	ID3D11Texture2D * textbuffer;
+						//	ID3D11Texture2D * textbuffer;
 
-		//	hr = sc->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&textbuffer);
-		//	hr = thedevice->CreateRenderTargetView(textbuffer, NULL, &RenTarView);
+						//	hr = sc->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&textbuffer);
+						//	hr = thedevice->CreateRenderTargetView(textbuffer, NULL, &RenTarView);
 
-		//	textbuffer->Release();
-		//	pDepthStencil->Release();
-		//	pDSV->Release();
-		//	//HRESULT hr = S_OK;
-		//	texdepth.Width = w;
-		//	texdepth.Height = h;
-		//	texdepth.MipLevels = 1;
-		//	texdepth.ArraySize = 1;
-		//	texdepth.Format = DXGI_FORMAT_D32_FLOAT;
-		//	texdepth.SampleDesc.Count = 4;
-		//	texdepth.SampleDesc.Quality = 0;
-		//	texdepth.Usage = D3D11_USAGE_DEFAULT;
-		//	texdepth.BindFlags = D3D11_BIND_DEPTH_STENCIL;
-		//	texdepth.CPUAccessFlags = 0;
-		//	texdepth.MiscFlags = 0;
-		//	hr = thedevice->CreateTexture2D(&texdepth, NULL, &pDepthStencil);
+						//	textbuffer->Release();
+						//	pDepthStencil->Release();
+						//	pDSV->Release();
+						//	//HRESULT hr = S_OK;
+						//	texdepth.Width = w;
+						//	texdepth.Height = h;
+						//	texdepth.MipLevels = 1;
+						//	texdepth.ArraySize = 1;
+						//	texdepth.Format = DXGI_FORMAT_D32_FLOAT;
+						//	texdepth.SampleDesc.Count = 4;
+						//	texdepth.SampleDesc.Quality = 0;
+						//	texdepth.Usage = D3D11_USAGE_DEFAULT;
+						//	texdepth.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+						//	texdepth.CPUAccessFlags = 0;
+						//	texdepth.MiscFlags = 0;
+						//	hr = thedevice->CreateTexture2D(&texdepth, NULL, &pDepthStencil);
 
-		//	ZeroMemory(&texdsv, sizeof(texdsv));
-		//	texdsv.Format = DXGI_FORMAT_D32_FLOAT;
-		//	texdsv.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
-		//	texdsv.Texture2D.MipSlice = 0;
+						//	ZeroMemory(&texdsv, sizeof(texdsv));
+						//	texdsv.Format = DXGI_FORMAT_D32_FLOAT;
+						//	texdsv.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
+						//	texdsv.Texture2D.MipSlice = 0;
 
-		//	hr = thedevice->CreateDepthStencilView(pDepthStencil, // Depth stencil texture
-		//		&texdsv, // Depth stencil desc
-		//		&pDSV);  // [out] Depth stencil view
+						//	hr = thedevice->CreateDepthStencilView(pDepthStencil, // Depth stencil texture
+						//		&texdsv, // Depth stencil desc
+						//		&pDSV);  // [out] Depth stencil view
 
-		//	thedevicecontext->OMSetRenderTargets(1, &RenTarView, NULL);
+						//	thedevicecontext->OMSetRenderTargets(1, &RenTarView, NULL);
 
-		//	vp.Width = w;
-		//	vp.Height = h;
-		//	vp.MinDepth = 0.0f;
-		//	vp.MaxDepth = 1.0f;
-		//	vp.TopLeftX = 0;
-		//	vp.TopLeftY = 0;
-		//	thedevicecontext->RSSetViewports(1, &vp);
+						//	vp.Width = w;
+						//	vp.Height = h;
+						//	vp.MinDepth = 0.0f;
+						//	vp.MaxDepth = 1.0f;
+						//	vp.TopLeftX = 0;
+						//	vp.TopLeftY = 0;
+						//	thedevicecontext->RSSetViewports(1, &vp);
 
-		//}
+						//}
 	}
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
