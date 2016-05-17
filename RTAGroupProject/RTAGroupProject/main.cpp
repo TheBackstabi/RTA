@@ -76,11 +76,17 @@ public:
 		Matrix transform;
 		float keyTime;
 	};
+	struct Bone
+	{
+		Matrix joint;
+		vector<int>boneAffectedVertIndices;
+		vector<double>boneVertWeights;
+	};
 	vector<MyVertex> vertexvec;
 	vector<MyNormal> normalvec;
 	vector<MyUV> uvvec;
 	vector<unsigned int> indiciesvec;
-	vector<Matrix> keyFrames;
+	vector<Bone> meshBones;
 	SEND_TO_VRAM toShader;
 	ID3D11InputLayout *InputLayout;
 	SEND_TO_OBJECT objecttoObject;
@@ -113,11 +119,21 @@ void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh)
 	if (skin != 0)
 	{
 		int boneCount = skin->GetClusterCount();
+		meshBones.resize(boneCount);
 		for (int boneIndex = 0; boneIndex < boneCount; boneIndex++)
 		{
 			FbxCluster* cluster = skin->GetCluster(boneIndex);
 			FbxNode* bone = cluster->GetLink(); // Get a reference to the bone's node
-
+			meshBones[boneIndex].joint.mat[0][0] = (float)bone->LclScaling.Get().mData[0];
+			meshBones[boneIndex].joint.mat[1][1] = (float)bone->LclScaling.Get().mData[1];
+			meshBones[boneIndex].joint.mat[2][2] = (float)bone->LclScaling.Get().mData[2];
+			meshBones[boneIndex].joint.mat[0][1] = (float)bone->LclRotation.Get().mData[0];
+			meshBones[boneIndex].joint.mat[1][0] = (float)bone->LclRotation.Get().mData[1];
+			meshBones[boneIndex].joint.mat[2][1] = (float)bone->LclRotation.Get().mData[2];
+			meshBones[boneIndex].joint.mat[0][2] = (float)bone->LclTranslation.Get().mData[0];
+			meshBones[boneIndex].joint.mat[1][2] = (float)bone->LclTranslation.Get().mData[1];
+			meshBones[boneIndex].joint.mat[2][0] = (float)bone->LclTranslation.Get().mData[2];
+			
 			// Get the bind pose
 			FbxAMatrix bindPoseMatrix;
 			cluster->GetTransformLinkMatrix(bindPoseMatrix);
@@ -130,7 +146,9 @@ void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh)
 			for (int boneVertexIndex = 0; boneVertexIndex < numBoneVertexIndices; boneVertexIndex++)
 			{
 				int boneVertexIndex2 = boneVertexIndices[boneVertexIndex];
+				meshBones[boneIndex].boneAffectedVertIndices.push_back(boneVertexIndex2);
 				float boneWeight = (float)boneVertexWeights[boneVertexIndex];
+				meshBones[boneIndex].boneVertWeights.push_back(boneWeight);
 			}
 		}
 	}
@@ -231,6 +249,7 @@ void RTAPROJECT::LoadNodeKeyframeAnimation(FbxNode* fbxNode)
 		}
 	}
 }
+
 HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector, string& filepath)
 {
 	if (fbxManager == nullptr)
@@ -254,6 +273,9 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 
 	FbxNode* pFbxRootNode = pFbxScene->GetRootNode();
 
+	
+
+
 	if (pFbxRootNode)
 	{
 		int childcount = pFbxRootNode->GetChildCount();
@@ -271,6 +293,9 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 
 			FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
 			
+			LoadMesh_Skeleton(pMesh);
+
+
 			FbxVector4* pVertices = pMesh->GetControlPoints();
 			bool unmapped;
 			for (int j = 0; j < pMesh->GetPolygonCount(); j++)
