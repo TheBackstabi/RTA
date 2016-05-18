@@ -81,10 +81,10 @@ public:
 	struct Bone
 	{
 		const char* name;
+		int parentindex = 0;
 		Matrix joint;
 		vector<int>boneAffectedVertIndices;
 		vector<double>boneVertWeights;
-		unsigned int parentindex = 0;
 	};
 	int count = 0;
 
@@ -120,32 +120,62 @@ public:
 
 	void Loadfile(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath);
 	void LoadNodeKeyframeAnimation(FbxNode* fbxNode);
-	void LoadMesh_Skeleton(FbxMesh *fbxMesh);
+	void LoadMesh_Skeleton(FbxMesh *fbxMesh, FbxNode* root);
 	void RTAPROJECT::generateJointBoxes();
+	FbxAMatrix RTAPROJECT::GetGeometryTransformation(FbxNode* inNode);
 	void RTAPROJECT::ProcessSkeletonHierarchyRecursively(FbxNode* inNode, int myIndex, int inParentIndex);
 
 };
+
+FbxAMatrix RTAPROJECT::GetGeometryTransformation(FbxNode* inNode)
+{
+	if (!inNode)
+	{
+		throw std::exception("Null for mesh geometry");
+	}
+
+	const FbxVector4 lT = inNode->GetGeometricTranslation(FbxNode::eSourcePivot);
+	const FbxVector4 lR = inNode->GetGeometricRotation(FbxNode::eSourcePivot);
+	const FbxVector4 lS = inNode->GetGeometricScaling(FbxNode::eSourcePivot);
+
+	return FbxAMatrix(lT, lR, lS);
+}
 
 void RTAPROJECT::ProcessSkeletonHierarchyRecursively(FbxNode* inNode, int myIndex, int inParentIndex)
 {
 	
 	if (inNode->GetNodeAttribute() && inNode->GetNodeAttribute()->GetAttributeType() && inNode->GetNodeAttribute()->GetAttributeType() == FbxNodeAttribute::eSkeleton)
 	{
-		
-		meshBones[myIndex].parentindex = inParentIndex;
-		meshBones[myIndex].name = inNode->GetName();
-		count += 1;
+		const char * tempname = inNode->GetName();
+		if (tempname == "Nose_J")
+		{
+			int nonsense = 0;
+		}
+		if (tempname != "Nose_J"|| tempname != "Weapon_Attach_J" || tempname != "L_Toe_J"|| tempname != "R_Toe_J" && count < 33)
+		{
+			meshBones[myIndex].parentindex = inParentIndex;
+			count += 1;
+
+		}
+
 	}
 	for (int i = 0; i < inNode->GetChildCount(); i++)
 	{
-		ProcessSkeletonHierarchyRecursively(inNode->GetChild(i), count, myIndex);
+		if (count < 33)
+		{
+			ProcessSkeletonHierarchyRecursively(inNode->GetChild(i), count, myIndex);
+		}
 	}
 }
 
-void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh)
+void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh, FbxNode* root)
 {
 	int numDeformers = fbxMesh->GetDeformerCount();
 	FbxSkin* skin = (FbxSkin*)fbxMesh->GetDeformer(0, FbxDeformer::eSkin);
+	FbxAMatrix transformMatrix;
+	FbxAMatrix transformLinkMatrix;
+	FbxAMatrix globalBindposeInverseMatrix;
+	FbxAMatrix geometryTransform = GetGeometryTransformation(root);
 	if (skin != 0)
 	{
 		int boneCount = skin->GetClusterCount();
@@ -153,16 +183,21 @@ void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh)
 		for (int boneIndex = 0; boneIndex < boneCount; boneIndex++)
 		{
 			FbxCluster* cluster = skin->GetCluster(boneIndex);
-			FbxNode* bone = cluster->GetLink(); // Get a reference to the bone's node
-			FbxVector4 translate = bone->LclTranslation.Get();
-			FbxVector4 rotate = bone->LclRotation.Get();
-			FbxVector4 scale = bone->LclScaling.Get();
-			FbxMatrix testTransform(translate, rotate, scale);
+			FbxNode* bone = cluster->GetLink(); // Get a reference to the bone's nod
+			meshBones[boneIndex].name = bone->GetName();
+			meshBones[boneIndex].parentindex = boneIndex - 1;
+			cluster->GetTransformMatrix(transformMatrix);
+			cluster->GetTransformLinkMatrix(transformLinkMatrix);
+			globalBindposeInverseMatrix = transformLinkMatrix.Inverse() * transformMatrix * geometryTransform;
+
 			for (int y = 0; y < 4; y++){
 				for (int x = 0; x < 4; x++){
-					meshBones[boneIndex].joint.mat[y][x] = testTransform.Get(y, x);
+					meshBones[boneIndex].joint.mat[y][x] = globalBindposeInverseMatrix.Get(y, x);
 				}
 			}
+			meshBones[boneIndex].joint.mat[3][1] *= -1;
+			meshBones[boneIndex].joint.mat[3][2] *= -1;
+
 			// Get the bind pose
 			FbxAMatrix bindPoseMatrix;
 			cluster->GetTransformLinkMatrix(bindPoseMatrix);
@@ -315,7 +350,6 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 
 			if (AttributeType == FbxNodeAttribute::eSkeleton)
 			{
-				meshBones.resize(37);
 				ProcessSkeletonHierarchyRecursively(pFbxChildNode, 0, -1);
 				int x = meshBones.size();
 			}
@@ -324,8 +358,8 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 
 			FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
 			
-			LoadMesh_Skeleton(pMesh);
-
+			LoadMesh_Skeleton(pMesh, pFbxRootNode);
+			int x = meshBones.size();
 
 			FbxVector4* pVertices = pMesh->GetControlPoints();
 			FbxGeometryElementNormal* vertexNormal = pMesh->GetElementNormal();
@@ -665,7 +699,7 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 		loadedvertexes2[i].u = jointUV[0][i].uv[0];
 		loadedvertexes2[i].v = jointUV[0][i].uv[1];
 	}
-	
+
 	unsigned int* loadedindicies = new unsigned int[temptriangle.size()];
 	for (unsigned int j = 0; j < temptriangle.size(); j++)
 	{
@@ -802,7 +836,7 @@ bool RTAPROJECT::Run()
 
 	thedevicecontext->OMSetRenderTargets(1, &RenTarView, pDSV);
 	thedevicecontext->RSSetViewports(1, &vp);
-	translateparam = .1f;
+	translateparam = 1.0f;
 
 	if (GetAsyncKeyState('W'))
 	{
