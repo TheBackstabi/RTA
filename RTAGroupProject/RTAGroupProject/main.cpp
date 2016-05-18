@@ -517,7 +517,7 @@ void RTAPROJECT::generateJointBoxes()
 		jointNorms[i].resize(1);
 		jointUV[i].resize(1);
 		jointPath[i].resize(1);
-		LoadFBX("JointBox", jointVerts[i], jointNorms[i], jointUV[i], jointPath[i]);
+		LoadFBX("JointBox.fbx", jointVerts[i], jointNorms[i], jointUV[i], jointPath[i]);
 	}
 }
 RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
