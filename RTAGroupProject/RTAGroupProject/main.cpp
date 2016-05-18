@@ -83,8 +83,12 @@ public:
 		vector<double>boneVertWeights;
 	};
 	vector<MyVertex> vertexvec;
+	vector<vector<MyVertex>> jointVerts;
 	vector<MyNormal> normalvec;
+	vector<vector<MyNormal>> jointNorms;
 	vector<MyUV> uvvec;
+	vector<vector<MyUV>> jointUV;
+	vector<string> jointPath;
 	vector<unsigned int> indiciesvec;
 	vector<Bone> meshBones;
 	SEND_TO_VRAM toShader;
@@ -109,6 +113,7 @@ public:
 	void Loadfile(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath);
 	void LoadNodeKeyframeAnimation(FbxNode* fbxNode);
 	void LoadMesh_Skeleton(FbxMesh *fbxMesh);
+	void RTAPROJECT::generateJointBoxes();
 
 };
 
@@ -477,13 +482,17 @@ void RTAPROJECT::readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVec
 	}
 }
 
+
+
+
+
 void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath)
 {
 	fstream file;
 
 
 	file.open(filenamenoextension + ".RTAmesh", ios_base::binary | ios_base::in);
-	if (file.is_open())
+	if (!file.is_open())
 	{
 		readfromRTAmesh(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath);
 	}
@@ -494,6 +503,21 @@ void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVerte
 		LoadFBX(fullfilename, pinVertexVector, pinNormalVector, pinUVector, filepath);
 
 		WritetoBinary(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath);
+	}
+}
+void RTAPROJECT::generateJointBoxes()
+{
+	jointVerts.resize(meshBones.size());
+	jointNorms.resize(meshBones.size());
+	jointUV.resize(meshBones.size());
+	jointPath.resize(meshBones.size());
+	for (int i = 0; i < meshBones.size(); i++)
+	{
+		jointVerts[i].resize(1);
+		jointNorms[i].resize(1);
+		jointUV[i].resize(1);
+		jointPath[i].resize(1);
+		LoadFBX("JointBox", jointVerts[i], jointNorms[i], jointUV[i], jointPath[i]);
 	}
 }
 RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
@@ -552,11 +576,15 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	
 	Loadfile("Teddy_Idle", vertexvec, normalvec, uvvec, thepath);
 
+	generateJointBoxes();
+
+
 	wstring tempstring(thepath.begin(), thepath.end());
 	const wchar_t* szName = tempstring.c_str();
 	//Use CreateWICTextureFromFile for anything that isn't a .dds
 	//Use CreateDDSTextureFromFile for .dds files (duh)
 	CreateWICTextureFromFile(thedevice, szName, NULL, &floorRSV[0]);
+	
 	//CreateDDSTextureFromFile(thedevice, szName, NULL, &floorRSV[0]);
 #pragma region .MESH fileloading
 	//loadfromfile("Arwing_002.mesh", this);
