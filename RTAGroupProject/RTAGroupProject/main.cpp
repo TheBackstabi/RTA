@@ -30,6 +30,8 @@ class RTAPROJECT
 	ID3D11Device *thedevice;
 	ID3D11RenderTargetView *RenTarView;
 	ID3D11Buffer *buffer;
+	ID3D11Buffer *buffer2;
+
 	ID3D11Buffer *buffertempobj;
 
 	unsigned int numverts = 0;
@@ -78,10 +80,14 @@ public:
 	};
 	struct Bone
 	{
+		const char* name;
 		Matrix joint;
 		vector<int>boneAffectedVertIndices;
 		vector<double>boneVertWeights;
+		unsigned int parentindex = 0;
 	};
+	int count = 0;
+
 	vector<MyVertex> vertexvec;
 	vector<vector<MyVertex>> jointVerts;
 	vector<MyNormal> normalvec;
@@ -101,6 +107,8 @@ public:
 	vector<tVertex> tempverts;
 	vector<unsigned int> temptriangle;
 	FbxScene* pFbxScene;
+	int* indexbuffer = nullptr;
+	int numindexes = 0;
 	RTAPROJECT(HINSTANCE hinst, WNDPROC proc);
 	bool Run();
 	bool ShutDown();
@@ -114,8 +122,25 @@ public:
 	void LoadNodeKeyframeAnimation(FbxNode* fbxNode);
 	void LoadMesh_Skeleton(FbxMesh *fbxMesh);
 	void RTAPROJECT::generateJointBoxes();
+	void RTAPROJECT::ProcessSkeletonHierarchyRecursively(FbxNode* inNode, int myIndex, int inParentIndex);
 
 };
+
+void RTAPROJECT::ProcessSkeletonHierarchyRecursively(FbxNode* inNode, int myIndex, int inParentIndex)
+{
+	
+	if (inNode->GetNodeAttribute() && inNode->GetNodeAttribute()->GetAttributeType() && inNode->GetNodeAttribute()->GetAttributeType() == FbxNodeAttribute::eSkeleton)
+	{
+		
+		meshBones[myIndex].parentindex = inParentIndex;
+		meshBones[myIndex].name = inNode->GetName();
+		count += 1;
+	}
+	for (int i = 0; i < inNode->GetChildCount(); i++)
+	{
+		ProcessSkeletonHierarchyRecursively(inNode->GetChild(i), count, myIndex);
+	}
+}
 
 void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh)
 {
@@ -129,16 +154,15 @@ void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh)
 		{
 			FbxCluster* cluster = skin->GetCluster(boneIndex);
 			FbxNode* bone = cluster->GetLink(); // Get a reference to the bone's node
-			meshBones[boneIndex].joint.mat[0][0] = (float)bone->LclScaling.Get().mData[0];
-			meshBones[boneIndex].joint.mat[1][1] = (float)bone->LclScaling.Get().mData[1];
-			meshBones[boneIndex].joint.mat[2][2] = (float)bone->LclScaling.Get().mData[2];
-			meshBones[boneIndex].joint.mat[0][1] = (float)bone->LclRotation.Get().mData[0];
-			meshBones[boneIndex].joint.mat[1][0] = (float)bone->LclRotation.Get().mData[1];
-			meshBones[boneIndex].joint.mat[2][1] = (float)bone->LclRotation.Get().mData[2];
-			meshBones[boneIndex].joint.mat[0][2] = (float)bone->LclTranslation.Get().mData[0];
-			meshBones[boneIndex].joint.mat[1][2] = (float)bone->LclTranslation.Get().mData[1];
-			meshBones[boneIndex].joint.mat[2][0] = (float)bone->LclTranslation.Get().mData[2];
-			
+			FbxVector4 translate = bone->LclTranslation.Get();
+			FbxVector4 rotate = bone->LclRotation.Get();
+			FbxVector4 scale = bone->LclScaling.Get();
+			FbxMatrix testTransform(translate, rotate, scale);
+			for (int y = 0; y < 4; y++){
+				for (int x = 0; x < 4; x++){
+					meshBones[boneIndex].joint.mat[y][x] = testTransform.Get(y, x);
+				}
+			}
 			// Get the bind pose
 			FbxAMatrix bindPoseMatrix;
 			cluster->GetTransformLinkMatrix(bindPoseMatrix);
@@ -278,21 +302,23 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 
 	FbxNode* pFbxRootNode = pFbxScene->GetRootNode();
 
-	
-
-
 	if (pFbxRootNode)
 	{
 		int childcount = pFbxRootNode->GetChildCount();
 		for (int i = 0; i < childcount; i++)
 		{
 			FbxNode* pFbxChildNode = pFbxRootNode->GetChild(i);
-
 			if (pFbxChildNode->GetNodeAttribute() == NULL)
 				continue;
 
 			FbxNodeAttribute::EType AttributeType = pFbxChildNode->GetNodeAttribute()->GetAttributeType();
 
+			if (AttributeType == FbxNodeAttribute::eSkeleton)
+			{
+				meshBones.resize(37);
+				ProcessSkeletonHierarchyRecursively(pFbxChildNode, 0, -1);
+				int x = meshBones.size();
+			}
 			if (AttributeType != FbxNodeAttribute::eMesh)
 				continue;
 
@@ -302,6 +328,10 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 
 
 			FbxVector4* pVertices = pMesh->GetControlPoints();
+			FbxGeometryElementNormal* vertexNormal = pMesh->GetElementNormal();
+			numindexes = pMesh->GetPolygonVertexCount();
+			indexbuffer = new int[numindexes];
+			indexbuffer = pMesh->GetPolygonVertices();
 			bool unmapped;
 			for (int j = 0; j < pMesh->GetPolygonCount(); j++)
 			{
@@ -492,7 +522,7 @@ void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVerte
 
 
 	file.open(filenamenoextension + ".RTAmesh", ios_base::binary | ios_base::in);
-	if (!file.is_open())
+	if (file.is_open())
 	{
 		readfromRTAmesh(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath);
 	}
@@ -502,7 +532,7 @@ void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVerte
 
 		LoadFBX(fullfilename, pinVertexVector, pinNormalVector, pinUVector, filepath);
 
-		WritetoBinary(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath);
+		//WritetoBinary(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath);
 	}
 }
 void RTAPROJECT::generateJointBoxes()
@@ -564,6 +594,8 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	{
 		D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, NULL, NULL, NULL, D3D11_SDK_VERSION, &SwapChainDescVar, &sc, &thedevice, NULL, &thedevicecontext);
 	}
+	count = 0;
+
 	sc->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&thetexture);
 
 	thedevice->CreateRenderTargetView(thetexture, NULL, &RenTarView);
@@ -577,7 +609,6 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	Loadfile("Teddy_Idle", vertexvec, normalvec, uvvec, thepath);
 
 	generateJointBoxes();
-
 
 	wstring tempstring(thepath.begin(), thepath.end());
 	const wchar_t* szName = tempstring.c_str();
@@ -618,7 +649,23 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 		loadedvertexes[i].u = uvvec[i].uv[0];
 		loadedvertexes[i].v = uvvec[i].uv[1];
 	}
+	
+	size_t size2 = jointVerts[0].size();
+	SIMPLE_VERTEX* loadedvertexes2 = new SIMPLE_VERTEX[size2];
+	for (unsigned int i = 0; i < size2; i++)
+	{
 
+		loadedvertexes2[i].x = jointVerts[0][i].pos[0];
+		loadedvertexes2[i].y = jointVerts[0][i].pos[1];
+		loadedvertexes2[i].z = jointVerts[0][i].pos[2];
+		loadedvertexes2[i].w = 1;
+		loadedvertexes2[i].n = jointNorms[0][i].normal[0];
+		loadedvertexes2[i].r = jointNorms[0][i].normal[1];
+		loadedvertexes2[i].m = jointNorms[0][i].normal[2];
+		loadedvertexes2[i].u = jointUV[0][i].uv[0];
+		loadedvertexes2[i].v = jointUV[0][i].uv[1];
+	}
+	
 	unsigned int* loadedindicies = new unsigned int[temptriangle.size()];
 	for (unsigned int j = 0; j < temptriangle.size(); j++)
 	{
@@ -648,15 +695,30 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 
 	thedevice->CreateBuffer(&buffdesc, &thedata, &buffer);
 
+	//Vertex Buffer
+	D3D11_SUBRESOURCE_DATA thedata2;
+	thedata2.pSysMem = loadedvertexes2;
+	thedata2.SysMemPitch = 0;
+	thedata2.SysMemSlicePitch = 0;
+
+	ZeroMemory(&buffdesc, sizeof(buffdesc));
+
+	buffdesc.Usage = D3D11_USAGE_IMMUTABLE;
+	buffdesc.ByteWidth = sizeof(SIMPLE_VERTEX) * jointVerts[0].size();
+	buffdesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	buffdesc.CPUAccessFlags = NULL;
+
+	thedevice->CreateBuffer(&buffdesc, &thedata2, &buffer2);
+
 	D3D11_SUBRESOURCE_DATA theInddata;
-	theInddata.pSysMem = loadedindicies;
+	theInddata.pSysMem = indexbuffer;
 	theInddata.SysMemPitch = 0;
 	theInddata.SysMemSlicePitch = 0;
 
 	ZeroMemory(&Indexbufferdesc, sizeof(Indexbufferdesc));
 
 	Indexbufferdesc.Usage = D3D11_USAGE_IMMUTABLE;
-	Indexbufferdesc.ByteWidth = sizeof(unsigned int) * temptriangle.size();
+	Indexbufferdesc.ByteWidth = sizeof(unsigned int) * numindexes;
 	Indexbufferdesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 	Indexbufferdesc.CPUAccessFlags = NULL;
 
@@ -801,14 +863,45 @@ bool RTAPROJECT::Run()
 	unsigned int Stride = sizeof(SIMPLE_VERTEX);
 	unsigned int Offset = 0;
 	thedevicecontext->IASetVertexBuffers(0, 1, &buffer, &Stride, &Offset);
-	thedevicecontext->IASetIndexBuffer(Indexbuffer, DXGI_FORMAT_R32_UINT, 0);
+	//thedevicecontext->IASetIndexBuffer(Indexbuffer, DXGI_FORMAT_R32_UINT, 0);
 	thedevicecontext->VSSetShader(vertshader, 0, 0);
 	thedevicecontext->PSSetShader(pixshader, 0, 0);
 	thedevicecontext->PSSetShaderResources(0, 1, &floorRSV[0]);
 	thedevicecontext->IASetInputLayout(InputLayout);
 	thedevicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	//thedevicecontext->DrawIndexed(temptriangle.size(), 0, 0);
 	thedevicecontext->Draw(vertexvec.size(), 0);
+	//thedevicecontext->DrawIndexed(numindexes, 0, 0);
+	for (unsigned int i = 0; i < meshBones.size(); i++)
+	{
+		thedevicecontext->Map(constbuffer, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &Mapsubres);
+
+		memcpy(Mapsubres.pData, &meshBones[i].joint.mat, sizeof(meshBones[i].joint.mat));
+
+		thedevicecontext->Unmap(constbuffer, NULL);
+
+		thedevicecontext->Map(constbuffer2, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &Mapsubres2);
+		Matrix savedViewMatrix = objecttoScene.ViewMatrix;
+		SpecialCaseMatInverse(objecttoScene.ViewMatrix);
+		memcpy(Mapsubres2.pData, &objecttoScene, sizeof(objecttoScene));
+		objecttoScene.ViewMatrix = savedViewMatrix;
+
+		thedevicecontext->Unmap(constbuffer2, NULL);
+		thedevicecontext->VSSetConstantBuffers(0, 1, &constbuffer);
+		thedevicecontext->VSSetConstantBuffers(1, 1, &constbuffer2);
+		unsigned int Stride = sizeof(SIMPLE_VERTEX);
+		unsigned int Offset = 0;
+		thedevicecontext->IASetVertexBuffers(0, 1, &buffer2, &Stride, &Offset);
+		thedevicecontext->IASetIndexBuffer(Indexbuffer, DXGI_FORMAT_R32_UINT, 0);
+		thedevicecontext->VSSetShader(vertshader, 0, 0);
+		thedevicecontext->PSSetShader(pixshader, 0, 0);
+		thedevicecontext->PSSetShaderResources(0, 1, &floorRSV[0]);
+		thedevicecontext->IASetInputLayout(InputLayout);
+		thedevicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		thedevicecontext->DrawIndexed(numindexes, 0, 0);
+
+
+	}
 	mousePos = newMousePos;
 	sc->Present(0, 0);
 
@@ -831,7 +924,7 @@ bool RTAPROJECT::ShutDown()
 	SAFE_RELEASE(pDepthStencil);
 	SAFE_RELEASE(pDSV);
 	SAFE_RELEASE(floorRSV[0]);
-	SAFE_RELEASE(Indexbuffer);
+	//SAFE_RELEASE(Indexbuffer);
 	UnregisterClass(L"DirectXApplication", application);
 	return true;
 }

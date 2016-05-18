@@ -11,6 +11,14 @@ struct Matrix
 		}
 		mat[0][0] = mat[1][1] = mat[2][2] = mat[3][3] = 1;
 	}
+	Matrix& operator=(Matrix& _rhs){
+		for (int i = 0; i < 4; i++){
+			for (int j = 0; j < 4; j++){
+				mat[i][j] = _rhs.mat[i][j];
+			}
+		}
+		return *this;
+	}
 };
 struct Vertex
 {

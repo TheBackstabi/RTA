@@ -8,7 +8,7 @@ float4 main(float2 baseUV : TEXCOORD0, float4 worldPos : WORLD_POS, float3 baseN
 	float4 PlightDir = normalize(PlocalLight - worldPos);
 	float PlightRatio = saturate(dot(PlightDir, baseNorm));
 	float4 PlightColor = float4(1, 1, 1, 1);
-	float4 temp = baseTexture.Sample(filter, baseUV);
+	float4 temp = float4(1, 1, 1, 1);// baseTexture.Sample(filter, baseUV);
 
 	float3 globalLight = float3(.1, .1, .1);
 	float GlightRatio = saturate(dot(globalLight, baseNorm));
