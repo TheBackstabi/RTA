@@ -803,6 +803,9 @@ bool RTAPROJECT::Run()
 	thedevicecontext->OMSetRenderTargets(1, &RenTarView, pDSV);
 	thedevicecontext->RSSetViewports(1, &vp);
 	translateparam = .1f;
+	if (GetAsyncKeyState(VK_LSHIFT)){
+		translateparam = .5f;
+	}
 
 	if (GetAsyncKeyState('W'))
 	{
@@ -921,10 +924,12 @@ bool RTAPROJECT::ShutDown()
 	SAFE_RELEASE(thedevice);
 	SAFE_RELEASE(RenTarView);
 	SAFE_RELEASE(buffer);
+	SAFE_RELEASE(buffer2);
 	SAFE_RELEASE(pDepthStencil);
 	SAFE_RELEASE(pDSV);
 	SAFE_RELEASE(floorRSV[0]);
-	//SAFE_RELEASE(Indexbuffer);
+	SAFE_RELEASE(Indexbuffer);
+	delete[] indexbuffer;
 	UnregisterClass(L"DirectXApplication", application);
 	return true;
 }
