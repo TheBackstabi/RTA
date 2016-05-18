@@ -5,3 +5,4 @@ x64
 *.tlog
 *.cso
 *.log
+/RTAGroupProject/RTAGroupProject/*.RTAmesh

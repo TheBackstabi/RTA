@@ -80,7 +80,6 @@ public:
 	};
 	struct Bone
 	{
-		const char* name;
 		int parentindex = 0;
 		Matrix joint;
 		vector<int>boneAffectedVertIndices;
@@ -146,22 +145,16 @@ void RTAPROJECT::ProcessSkeletonHierarchyRecursively(FbxNode* inNode, int myInde
 	
 	if (inNode->GetNodeAttribute() && inNode->GetNodeAttribute()->GetAttributeType() && inNode->GetNodeAttribute()->GetAttributeType() == FbxNodeAttribute::eSkeleton)
 	{
-		const char * tempname = inNode->GetName();
-		if (tempname == "Nose_J")
-		{
-			int nonsense = 0;
-		}
-		if (tempname != "Nose_J"|| tempname != "Weapon_Attach_J" || tempname != "L_Toe_J"|| tempname != "R_Toe_J" && count < 33)
-		{
-			meshBones[myIndex].parentindex = inParentIndex;
-			count += 1;
-
-		}
+	
+		meshBones[myIndex].parentindex = inParentIndex;
+		count += 1;
 
 	}
 	for (int i = 0; i < inNode->GetChildCount(); i++)
 	{
-		if (count < 33)
+		LoadNodeKeyframeAnimation(inNode);
+
+		if (count < meshBones.size())
 		{
 			ProcessSkeletonHierarchyRecursively(inNode->GetChild(i), count, myIndex);
 		}
@@ -184,7 +177,6 @@ void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh, FbxNode* root)
 		{
 			FbxCluster* cluster = skin->GetCluster(boneIndex);
 			FbxNode* bone = cluster->GetLink(); // Get a reference to the bone's nod
-			meshBones[boneIndex].name = bone->GetName();
 			meshBones[boneIndex].parentindex = boneIndex - 1;
 			cluster->GetTransformMatrix(transformMatrix);
 			cluster->GetTransformLinkMatrix(transformLinkMatrix);
@@ -481,8 +473,19 @@ void RTAPROJECT::WritetoBinary(string fbxfilenamenoextension, vector<MyVertex>& 
 		file.write((char*)&strlen, sizeof(unsigned int));
 
 		file.write(&filepath[0], strlen);
+
+		unsigned int numbones = meshBones.size();
+		file.write((char*)&numbones, sizeof(unsigned int));
+
+		for (unsigned int i = 0; i < meshBones.size(); i++)
+		{
+			file.write((char*)&meshBones[i], sizeof(Bone));
+		}
+
 		unsigned int vertexvecsize = pinVertexVector.size();
 		file.write((char*)&vertexvecsize, sizeof(unsigned int));
+
+
 
 		for (unsigned int i = 0; i < pinVertexVector.size(); i++)
 		{
@@ -519,6 +522,15 @@ void RTAPROJECT::readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVec
 		file.read((char*)&strlen, sizeof(unsigned int));
 		filepath.resize(strlen);
 		file.read(&filepath[0], strlen);
+
+		unsigned int numbones;
+		file.read((char*)&numbones, sizeof(unsigned int));
+		meshBones.resize(numbones);
+		for (unsigned int i = 0; i < numbones; i++)
+		{
+			file.read((char*)&meshBones[i], sizeof(Bone));
+		}
+
 		unsigned int vertexvecsize = 0;
 		file.read((char*)&vertexvecsize, sizeof(unsigned int));
 
@@ -546,10 +558,6 @@ void RTAPROJECT::readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVec
 	}
 }
 
-
-
-
-
 void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath)
 {
 	fstream file;
@@ -566,7 +574,7 @@ void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVerte
 
 		LoadFBX(fullfilename, pinVertexVector, pinNormalVector, pinUVector, filepath);
 
-		//WritetoBinary(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath);
+		WritetoBinary(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath);
 	}
 }
 void RTAPROJECT::generateJointBoxes()
@@ -575,14 +583,13 @@ void RTAPROJECT::generateJointBoxes()
 	jointNorms.resize(meshBones.size());
 	jointUV.resize(meshBones.size());
 	jointPath.resize(meshBones.size());
-	for (int i = 0; i < meshBones.size(); i++)
-	{
-		jointVerts[i].resize(1);
-		jointNorms[i].resize(1);
-		jointUV[i].resize(1);
-		jointPath[i].resize(1);
-		LoadFBX("JointBox.fbx", jointVerts[i], jointNorms[i], jointUV[i], jointPath[i]);
-	}
+
+	jointVerts[0].resize(1);
+	jointNorms[0].resize(1);
+	jointUV[0].resize(1);
+	jointPath[0].resize(1);
+	LoadFBX("JointBox.fbx", jointVerts[0], jointNorms[0], jointUV[0], jointPath[0]);
+	
 }
 RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 {
@@ -958,7 +965,6 @@ bool RTAPROJECT::ShutDown()
 	SAFE_RELEASE(pDepthStencil);
 	SAFE_RELEASE(pDSV);
 	SAFE_RELEASE(floorRSV[0]);
-	//SAFE_RELEASE(Indexbuffer);
 	UnregisterClass(L"DirectXApplication", application);
 	return true;
 }
