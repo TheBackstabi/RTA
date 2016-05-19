@@ -80,19 +80,24 @@ public:
 	};
 	struct Bone
 	{
-		int parentindex = 0;
 		Matrix joint;
 		vector<int>boneAffectedVertIndices;
 		vector<double>boneVertWeights;
+		int parentindex = 0;
+
 	};
 	int count = 0;
+	bool renderteddy = true;
+	bool renderjoints = true;
+	bool canpress = true;
+	bool canpress2 = true;
 
 	vector<MyVertex> vertexvec;
-	vector<vector<MyVertex>> jointVerts;
+	vector<MyVertex> jointVerts;
 	vector<MyNormal> normalvec;
-	vector<vector<MyNormal>> jointNorms;
+	vector<MyNormal> jointNorms;
 	vector<MyUV> uvvec;
-	vector<vector<MyUV>> jointUV;
+	vector<MyUV> jointUV;
 	vector<string> jointPath;
 	vector<unsigned int> indiciesvec;
 	vector<Bone> meshBones;
@@ -108,16 +113,17 @@ public:
 	FbxScene* pFbxScene;
 	int* indexbuffer = nullptr;
 	int numindexes = 0;
+
 	RTAPROJECT(HINSTANCE hinst, WNDPROC proc);
 	bool Run();
 	bool ShutDown();
 	HRESULT LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector, string& filepath);
 
-	void WritetoBinary(string filename, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector, string& filepath);
+	void WritetoBinary(string filename, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector, string& filepath, vector<Bone>& theskeleton);
 
-	void readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath);
+	void readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath, vector<Bone>& theskeleton);
 
-	void Loadfile(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath);
+	void Loadfile(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath, vector<Bone>& theskeleton);
 	void LoadNodeKeyframeAnimation(FbxNode* fbxNode);
 	void LoadMesh_Skeleton(FbxMesh *fbxMesh, FbxNode* root);
 	void RTAPROJECT::generateJointBoxes();
@@ -156,9 +162,9 @@ void RTAPROJECT::ProcessSkeletonHierarchyRecursively(FbxNode* inNode, int myInde
 
 		if (count < meshBones.size())
 		{
-			ProcessSkeletonHierarchyRecursively(inNode->GetChild(i), count, myIndex);
-		}
+		ProcessSkeletonHierarchyRecursively(inNode->GetChild(i), count, myIndex);
 	}
+}
 }
 
 void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh, FbxNode* root)
@@ -461,7 +467,7 @@ void loadfromfile(string filepath, RTAPROJECT* tempthis)
 	}
 }
 
-void RTAPROJECT::WritetoBinary(string fbxfilenamenoextension, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath)
+void RTAPROJECT::WritetoBinary(string fbxfilenamenoextension, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath, vector<Bone>& theskeleton)
 {
 	fstream file;
 
@@ -474,12 +480,42 @@ void RTAPROJECT::WritetoBinary(string fbxfilenamenoextension, vector<MyVertex>& 
 
 		file.write(&filepath[0], strlen);
 
-		unsigned int numbones = meshBones.size();
+		unsigned int numbones = theskeleton.size();
 		file.write((char*)&numbones, sizeof(unsigned int));
 
-		for (unsigned int i = 0; i < meshBones.size(); i++)
+		for (unsigned int i = 0; i < numbones; i++)
 		{
-			file.write((char*)&meshBones[i], sizeof(Bone));
+			int temp = theskeleton[i].boneAffectedVertIndices.size();
+			file.write((char*)&temp, sizeof(int));
+
+		}
+
+		for (unsigned int i = 0; i < numbones; i++)
+		{
+			int temp = theskeleton[i].boneVertWeights.size();
+			file.write((char*)&temp, sizeof(int));
+		}
+
+		for (unsigned int i = 0; i < theskeleton.size(); i++)
+		{
+			file.write((char*)&theskeleton[i].joint, sizeof(Matrix));
+			//file.write((char*)&theskeleton[i].boneAffectedVertIndices, sizeof(vector<int>));
+			//file.write((char*)&theskeleton[i].boneVertWeights, sizeof(vector<double>));
+			file.write((char*)&theskeleton[i].parentindex, sizeof(int));
+		}
+		for (unsigned int i = 0; i < numbones; i++)
+		{
+			for (unsigned int j = 0; j < theskeleton[i].boneAffectedVertIndices.size(); j++)
+			{
+				file.write((char*)&theskeleton[i].boneAffectedVertIndices[j], sizeof(int));
+			}
+		}
+		for (unsigned int i = 0; i < numbones; i++)
+		{
+			for (unsigned int j = 0; j < theskeleton[i].boneVertWeights.size(); j++)
+			{
+				file.write((char*)&theskeleton[i].boneVertWeights[j], sizeof(double));
+			}
 		}
 
 		unsigned int vertexvecsize = pinVertexVector.size();
@@ -510,7 +546,7 @@ void RTAPROJECT::WritetoBinary(string fbxfilenamenoextension, vector<MyVertex>& 
 	}
 }
 
-void RTAPROJECT::readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath)
+void RTAPROJECT::readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath, vector<Bone>& theskeleton)
 {
 	fstream file;
 
@@ -523,12 +559,61 @@ void RTAPROJECT::readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVec
 		filepath.resize(strlen);
 		file.read(&filepath[0], strlen);
 
-		unsigned int numbones;
+		unsigned int numbones = 0;
 		file.read((char*)&numbones, sizeof(unsigned int));
-		meshBones.resize(numbones);
+
+		vector<int> weightvecsizes;
+		weightvecsizes.resize(numbones);
+		vector<int> vertindiciesvecsizes;
+		vertindiciesvecsizes.resize(numbones);
+
 		for (unsigned int i = 0; i < numbones; i++)
 		{
-			file.read((char*)&meshBones[i], sizeof(Bone));
+			file.read((char*)&vertindiciesvecsizes[i], sizeof(int));
+
+		}
+
+		for (unsigned int i = 0; i < numbones; i++)
+		{
+
+			file.read((char*)&weightvecsizes[i], sizeof(int));
+		}
+
+		theskeleton.resize(numbones);
+		for (unsigned int i = 0; i < numbones; i++)
+		{
+			file.read((char*)&theskeleton[i].joint, sizeof(Matrix));
+			//file.read((char*)&theskeleton[i].boneAffectedVertIndices, sizeof(vector<int>));
+			//file.read((char*)&theskeleton[i].boneVertWeights, sizeof(vector<double>));
+			file.read((char*)&theskeleton[i].parentindex, sizeof(int));
+		}
+		vector<int> tempvec;
+
+		for (unsigned int i = 0; i < numbones; i++)
+		{
+			for (unsigned int j = 0; j < vertindiciesvecsizes[i]; j++)
+			{
+				tempvec.resize(vertindiciesvecsizes[i]);
+				file.read((char*)&tempvec[j], sizeof(int));
+			}
+			theskeleton[i].boneAffectedVertIndices = tempvec;
+
+			int x = 0;
+		}
+
+		vector<double> tempvec2;
+
+		for (unsigned int i = 0; i < numbones; i++)
+		{
+			for (unsigned int j = 0; j < weightvecsizes[i]; j++)
+			{
+				tempvec2.resize(weightvecsizes[i]);
+				file.read((char*)&tempvec2[j], sizeof(double));
+			}
+			theskeleton[i].boneVertWeights = tempvec2;
+
+			int x = 0;
+
 		}
 
 		unsigned int vertexvecsize = 0;
@@ -558,7 +643,7 @@ void RTAPROJECT::readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVec
 	}
 }
 
-void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath)
+void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath, vector<Bone>& theskeleton)
 {
 	fstream file;
 
@@ -566,7 +651,7 @@ void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVerte
 	file.open(filenamenoextension + ".RTAmesh", ios_base::binary | ios_base::in);
 	if (file.is_open())
 	{
-		readfromRTAmesh(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath);
+		readfromRTAmesh(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath, theskeleton);
 	}
 	else
 	{
@@ -574,7 +659,7 @@ void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVerte
 
 		LoadFBX(fullfilename, pinVertexVector, pinNormalVector, pinUVector, filepath);
 
-		WritetoBinary(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath);
+		WritetoBinary(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath, theskeleton);
 	}
 }
 void RTAPROJECT::generateJointBoxes()
@@ -584,11 +669,11 @@ void RTAPROJECT::generateJointBoxes()
 	jointUV.resize(meshBones.size());
 	jointPath.resize(meshBones.size());
 
-	jointVerts[0].resize(1);
-	jointNorms[0].resize(1);
-	jointUV[0].resize(1);
-	jointPath[0].resize(1);
-	LoadFBX("JointBox.fbx", jointVerts[0], jointNorms[0], jointUV[0], jointPath[0]);
+	jointVerts.resize(1);
+	jointNorms.resize(1);
+	jointUV.resize(1);
+	jointPath.resize(1);
+	LoadFBX("JointBox.fbx", jointVerts, jointNorms, jointUV, jointPath[0]);
 	
 }
 RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
@@ -647,7 +732,7 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 
 	string thepath;
 	
-	Loadfile("Teddy_Idle", vertexvec, normalvec, uvvec, thepath);
+	Loadfile("Teddy_Idle", vertexvec, normalvec, uvvec, thepath, meshBones);
 
 	generateJointBoxes();
 
@@ -691,22 +776,22 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 		loadedvertexes[i].v = uvvec[i].uv[1];
 	}
 	
-	size_t size2 = jointVerts[0].size();
+	size_t size2 = jointVerts.size();
 	SIMPLE_VERTEX* loadedvertexes2 = new SIMPLE_VERTEX[size2];
 	for (unsigned int i = 0; i < size2; i++)
 	{
 
-		loadedvertexes2[i].x = jointVerts[0][i].pos[0];
-		loadedvertexes2[i].y = jointVerts[0][i].pos[1];
-		loadedvertexes2[i].z = jointVerts[0][i].pos[2];
+		loadedvertexes2[i].x = jointVerts[i].pos[0];
+		loadedvertexes2[i].y = jointVerts[i].pos[1];
+		loadedvertexes2[i].z = jointVerts[i].pos[2];
 		loadedvertexes2[i].w = 1;
-		loadedvertexes2[i].n = jointNorms[0][i].normal[0];
-		loadedvertexes2[i].r = jointNorms[0][i].normal[1];
-		loadedvertexes2[i].m = jointNorms[0][i].normal[2];
-		loadedvertexes2[i].u = jointUV[0][i].uv[0];
-		loadedvertexes2[i].v = jointUV[0][i].uv[1];
+		loadedvertexes2[i].n = jointNorms[i].normal[0];
+		loadedvertexes2[i].r = jointNorms[i].normal[1];
+		loadedvertexes2[i].m = jointNorms[i].normal[2];
+		loadedvertexes2[i].u = jointUV[i].uv[0];
+		loadedvertexes2[i].v = jointUV[i].uv[1];
 	}
-
+	
 	unsigned int* loadedindicies = new unsigned int[temptriangle.size()];
 	for (unsigned int j = 0; j < temptriangle.size(); j++)
 	{
@@ -745,7 +830,7 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	ZeroMemory(&buffdesc, sizeof(buffdesc));
 
 	buffdesc.Usage = D3D11_USAGE_IMMUTABLE;
-	buffdesc.ByteWidth = sizeof(SIMPLE_VERTEX) * jointVerts[0].size();
+	buffdesc.ByteWidth = sizeof(SIMPLE_VERTEX) * jointVerts.size();
 	buffdesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	buffdesc.CPUAccessFlags = NULL;
 
@@ -844,6 +929,9 @@ bool RTAPROJECT::Run()
 	thedevicecontext->OMSetRenderTargets(1, &RenTarView, pDSV);
 	thedevicecontext->RSSetViewports(1, &vp);
 	translateparam = 1.0f;
+	if (GetAsyncKeyState(VK_LSHIFT)){
+		translateparam = 1.5f;
+	}
 
 	if (GetAsyncKeyState('W'))
 	{
@@ -871,6 +959,24 @@ bool RTAPROJECT::Run()
 	{
 		objecttoScene.ViewMatrix.mat[3][1] -= translateparam;
 
+	}
+	if (GetAsyncKeyState('1') && canpress)
+	{
+		renderteddy = !renderteddy;
+		canpress = false;
+	}
+	else if (!GetAsyncKeyState('1'))
+	{
+		canpress = true;
+	}
+	if (GetAsyncKeyState('2') && canpress2)
+	{
+		renderjoints = !renderjoints;
+		canpress2 = false;
+	}
+	else if (!GetAsyncKeyState('2'))
+	{
+		canpress2 = true;
 	}
 	if (GetAsyncKeyState(VK_RBUTTON) || GetAsyncKeyState(VK_LBUTTON)){
 		FLOAT3 savedPosition;
@@ -910,7 +1016,10 @@ bool RTAPROJECT::Run()
 	thedevicecontext->PSSetShaderResources(0, 1, &floorRSV[0]);
 	thedevicecontext->IASetInputLayout(InputLayout);
 	thedevicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	thedevicecontext->Draw(vertexvec.size(), 0);
+	if (renderteddy)
+	{
+		thedevicecontext->Draw(vertexvec.size(), 0);
+	}
 	//thedevicecontext->DrawIndexed(numindexes, 0, 0);
 	for (unsigned int i = 0; i < meshBones.size(); i++)
 	{
@@ -938,8 +1047,11 @@ bool RTAPROJECT::Run()
 		thedevicecontext->PSSetShaderResources(0, 1, &floorRSV[0]);
 		thedevicecontext->IASetInputLayout(InputLayout);
 		thedevicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		if (renderjoints)
+		{
+			thedevicecontext->DrawIndexed(numindexes, 0, 0);
 
-		thedevicecontext->DrawIndexed(numindexes, 0, 0);
+		}
 
 
 	}
@@ -962,9 +1074,12 @@ bool RTAPROJECT::ShutDown()
 	SAFE_RELEASE(thedevice);
 	SAFE_RELEASE(RenTarView);
 	SAFE_RELEASE(buffer);
+	SAFE_RELEASE(buffer2);
 	SAFE_RELEASE(pDepthStencil);
 	SAFE_RELEASE(pDSV);
 	SAFE_RELEASE(floorRSV[0]);
+	SAFE_RELEASE(Indexbuffer);
+	delete[] indexbuffer;
 	UnregisterClass(L"DirectXApplication", application);
 	return true;
 }
