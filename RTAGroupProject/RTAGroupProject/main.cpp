@@ -59,6 +59,7 @@ class RTAPROJECT
 	ID3D11PixelShader *pixshader;
 	POINT mousePos;
 	FbxManager* fbxManager = nullptr;
+	FbxAnimEvaluator* mySceneEvaluator;
 public:
 
 	struct MyVertex
@@ -73,7 +74,7 @@ public:
 	{
 		float normal[3];
 	};
-	struct KeyFrames
+	struct KeyFrame
 	{
 		Matrix transform;
 		float keyTime;
@@ -83,6 +84,7 @@ public:
 		Matrix joint;
 		vector<int>boneAffectedVertIndices;
 		vector<double>boneVertWeights;
+		vector<KeyFrame> Keyframes;
 		int parentindex = 0;
 
 	};
@@ -91,7 +93,8 @@ public:
 	bool renderjoints = true;
 	bool canpress = true;
 	bool canpress2 = true;
-
+	FbxTime currentTime = 0;
+	FbxLongLong currentFrame = 0;
 	vector<MyVertex> vertexvec;
 	vector<MyVertex> jointVerts;
 	vector<MyNormal> normalvec;
@@ -124,12 +127,11 @@ public:
 	void readfromRTAmesh(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath, vector<Bone>& theskeleton);
 
 	void Loadfile(string filename, vector<MyVertex>& pinVertexVector, vector<MyNormal>& pinNormalVector, vector<MyUV>& pinUVector, string& filepath, vector<Bone>& theskeleton);
-	void LoadNodeKeyframeAnimation(FbxNode* fbxNode);
+	void RTAPROJECT::LoadNodeKeyframeAnimation(FbxNode* fbxNode, int jointIndex);
 	void LoadMesh_Skeleton(FbxMesh *fbxMesh, FbxNode* root);
 	void RTAPROJECT::generateJointBoxes();
 	FbxAMatrix RTAPROJECT::GetGeometryTransformation(FbxNode* inNode);
 	void RTAPROJECT::ProcessSkeletonHierarchyRecursively(FbxNode* inNode, int myIndex, int inParentIndex);
-
 };
 
 FbxAMatrix RTAPROJECT::GetGeometryTransformation(FbxNode* inNode)
@@ -158,7 +160,7 @@ void RTAPROJECT::ProcessSkeletonHierarchyRecursively(FbxNode* inNode, int myInde
 	}
 	for (int i = 0; i < inNode->GetChildCount(); i++)
 	{
-		LoadNodeKeyframeAnimation(inNode);
+		//LoadNodeKeyframeAnimation(inNode);
 
 		if (count < meshBones.size())
 		{
@@ -212,105 +214,112 @@ void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh, FbxNode* root)
 				float boneWeight = (float)boneVertexWeights[boneVertexIndex];
 				meshBones[boneIndex].boneVertWeights.push_back(boneWeight);
 			}
+
+			FbxAnimStack* currAnimStack = pFbxScene->GetSrcObject<FbxAnimStack>(0);
+			FbxString animStackName = currAnimStack->GetName();
+			char* AnimationName = animStackName.Buffer();
+			FbxTakeInfo* takeInfo = pFbxScene->GetTakeInfo(animStackName);
+			FbxTime start = takeInfo->mLocalTimeSpan.GetStart();
+			FbxTime end = takeInfo->mLocalTimeSpan.GetStop();
+			FbxTime AnimationLength = end.GetFrameCount(FbxTime::eFrames24) - start.GetFrameCount(FbxTime::eFrames24) + 1;
+			//Keyframe** currAnim = &mSkeleton.mJoints[currJointIndex].mAnimation;
+			KeyFrame currAnim;
+			for (FbxLongLong i = start.GetFrameCount(FbxTime::eFrames24); i <= end.GetFrameCount(FbxTime::eFrames24); ++i)
+			{
+				FbxTime currTime;
+				currTime.SetFrame(i, FbxTime::eFrames24);
+				FbxAMatrix currentTransformOffset = bone->EvaluateGlobalTransform(currTime) * geometryTransform;
+				currAnim.transform = currentTransformOffset.Inverse() * bone->EvaluateGlobalTransform(currTime);
+				currAnim.keyTime = currTime.Get();
+				meshBones[boneIndex].Keyframes.push_back(currAnim);
+			}
 		}
 	}
 }
 
-
-void RTAPROJECT::LoadNodeKeyframeAnimation(FbxNode* fbxNode)
+void RTAPROJECT::LoadNodeKeyframeAnimation(FbxNode* fbxNode, int jointIndex)
 {
-	bool isAnimated = false;
-
-	// Iterate all animations (for example, walking, running, falling and etc.)
-	int numAnimations = pFbxScene->GetSrcObjectCount<FbxAnimStack>();
-	for (int animationIndex = 0; animationIndex < numAnimations; animationIndex++)
-	{
-		FbxAnimStack *animStack = (FbxAnimStack*)pFbxScene->GetSrcObject<FbxAnimStack>(animationIndex);
-		FbxAnimEvaluator *animEvaluator = pFbxScene->GetAnimationEvaluator();
-		animStack->GetName(); // Get the name of the animation if needed
-
-		// Iterate all the transformation layers of the animation. You can have several layers, for example one for translation, one for rotation, one for scaling and each can have keys at different frame numbers.
-		int numLayers = animStack->GetMemberCount();
-		for (int layerIndex = 0; layerIndex < numLayers; layerIndex++)
-		{
-			FbxAnimLayer *animLayer = (FbxAnimLayer*)animStack->GetMember(layerIndex);
-			animLayer->GetName(); // Get the layer's name if needed
-
-			FbxAnimCurve *translationCurve = fbxNode->LclTranslation.GetCurve(animLayer);
-			FbxAnimCurve *rotationCurve = fbxNode->LclRotation.GetCurve(animLayer);
-			FbxAnimCurve *scalingCurve = fbxNode->LclScaling.GetCurve(animLayer);
-
-			if (scalingCurve != NULL)
-			{
-				int numKeys = scalingCurve->KeyGetCount();
-				for (int keyIndex = 0; keyIndex < numKeys; keyIndex++)
-				{
-					FbxTime frameTime = scalingCurve->KeyGetTime(keyIndex);
-					FbxDouble3 scalingVector = fbxNode->EvaluateLocalScaling(frameTime);
-					float xscale = (float)scalingVector[0];
-					float yscale = (float)scalingVector[1];
-					float zscale = (float)scalingVector[2];
-
-					float frameSeconds = (float)frameTime.GetSecondDouble(); // If needed, get the time of the scaling keyframe, in seconds
-				}
-			}
-			else
-			{
-				// If this animation layer has no scaling curve, then use the default one, if needed
-				FbxDouble3 scalingVector = fbxNode->LclScaling.Get();
-				float xscale = (float)scalingVector[0];
-				float yscale = (float)scalingVector[1];
-				float zscale = (float)scalingVector[2];
-			}
-
-			if (rotationCurve != NULL)
-			{
-				int numKeys = rotationCurve->KeyGetCount();
-				for (int index = 0; index < numKeys; index++)
-				{
-					FbxTime frameTime = rotationCurve->KeyGetTime(index);
-					FbxDouble3 rotationVector = fbxNode->EvaluateLocalScaling(frameTime);
-					float xrotation = (float)rotationVector[0];
-					float yrotation = (float)rotationVector[1];
-					float zrotation = (float)rotationVector[2];
-
-					float frameSeconds = (float)frameTime.GetSecondDouble();
-				}
-			}
-			else
-			{
-				FbxDouble3 rotationVector = fbxNode->LclScaling.Get();
-				float xrotation = (float)rotationVector[0];
-				float yrotation = (float)rotationVector[1];
-				float zrotation = (float)rotationVector[2];
-			}
-			if (translationCurve != NULL)
-			{
-				int numKeys = translationCurve->KeyGetCount();
-				for (int index = 0; index < numKeys; index++)
-				{
-					FbxTime frameTime = translationCurve->KeyGetTime(index);
-					FbxDouble3 translationVector = fbxNode->EvaluateLocalScaling(frameTime);
-					float xtranslation = (float)translationVector[0];
-					float ytranslation = (float)translationVector[1];
-					float ztranslation = (float)translationVector[2];
-
-					float frameSeconds = (float)frameTime.GetSecondDouble();
-				}
-			}
-			else
-			{
-				FbxDouble3 translationVector = fbxNode->LclScaling.Get();
-				float xtranslation = (float)translationVector[0];
-				float ytranslation = (float)translationVector[1];
-				float ztranslation = (float)translationVector[2];
-			}
-
-
-			
-		}
-	}
+	
 }
+//void RTAPROJECT::LoadNodeKeyframeAnimation(FbxNode* fbxNode)
+//{
+//	bool isAnimated = false;
+//
+//	// Iterate all animations (for example, walking, running, falling and etc.)
+//	int numAnimations = pFbxScene->GetSrcObjectCount<FbxAnimStack>();
+//	for (int animationIndex = 0; animationIndex < numAnimations; animationIndex++)
+//	{
+//		FbxAnimStack *animStack = (FbxAnimStack*)pFbxScene->GetSrcObject<FbxAnimStack>(animationIndex);
+//		FbxAnimEvaluator *animEvaluator = pFbxScene->GetAnimationEvaluator();
+//		animStack->GetName(); // Get the name of the animation if needed
+//
+//		// Iterate all the transformation layers of the animation. You can have several layers, for example one for translation, one for rotation, one for scaling and each can have keys at different frame numbers.
+//		int numLayers = animStack->GetMemberCount();
+//		for (int layerIndex = 0; layerIndex < numLayers; layerIndex++)
+//		{
+//			FbxAnimLayer *animLayer = (FbxAnimLayer*)animStack->GetMember(layerIndex);
+//			animLayer->GetName(); // Get the layer's name if needed
+//
+//			FbxAnimCurve *translationCurve = fbxNode->LclTranslation.GetCurve(animLayer);
+//			FbxAnimCurve *rotationCurve = fbxNode->LclRotation.GetCurve(animLayer);
+//			FbxAnimCurve *scalingCurve = fbxNode->LclScaling.GetCurve(animLayer);
+//			FbxVector4 scalingVector, rotationVector, translationVector;
+//			float frameSeconds;
+//
+//			if (scalingCurve != NULL)
+//			{
+//				int numKeys = scalingCurve->KeyGetCount();
+//				for (int keyIndex = 0; keyIndex < numKeys; keyIndex++)
+//				{
+//					FbxTime frameTime = scalingCurve->KeyGetTime(keyIndex);
+//					scalingVector = fbxNode->EvaluateLocalScaling(frameTime);
+//					frameSeconds = (float)frameTime.GetSecondDouble(); // If needed, get the time of the scaling keyframe, in seconds
+//
+//				}
+//			}
+//			else
+//			{
+//				// If this animation layer has no scaling curve, then use the default one, if needed
+//				scalingVector = fbxNode->LclScaling.Get();
+//			}
+//
+//			if (rotationCurve != NULL)
+//			{
+//				int numKeys = rotationCurve->KeyGetCount();
+//				for (int index = 0; index < numKeys; index++)
+//				{
+//					FbxTime frameTime = rotationCurve->KeyGetTime(index);
+//					rotationVector = fbxNode->EvaluateLocalScaling(frameTime);
+//					frameSeconds = (float)frameTime.GetSecondDouble();
+//				}
+//			}
+//			else
+//			{
+//				rotationVector = fbxNode->LclScaling.Get();
+//			}
+//
+//			if (translationCurve != NULL)
+//			{
+//				int numKeys = translationCurve->KeyGetCount();
+//				for (int index = 0; index < numKeys; index++)
+//				{
+//					FbxTime frameTime = translationCurve->KeyGetTime(index);
+//					translationVector = fbxNode->EvaluateLocalScaling(frameTime);
+//					frameSeconds = (float)frameTime.GetSecondDouble();
+//				}
+//			}
+//			else
+//			{
+//				translationVector = fbxNode->LclScaling.Get();
+//			}
+//
+//			KeyFrame newKeyFrame;
+//			newKeyFrame.keyTime = frameSeconds;
+//			newKeyFrame.transform = FbxMatrix(translationVector, rotationVector, scalingVector);
+//			Keyframes.push_back(newKeyFrame);
+//		}
+//	}
+//}
 
 HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector, vector<MyNormal>& pOutNormalVector, vector<MyUV>& pOutUVector, string& filepath)
 {
@@ -428,7 +437,6 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 
 				}
 			}
-
 		}
 
 	}
@@ -649,7 +657,7 @@ void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVerte
 
 
 	file.open(filenamenoextension + ".RTAmesh", ios_base::binary | ios_base::in);
-	if (file.is_open())
+	if (!file.is_open())
 	{
 		readfromRTAmesh(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath, theskeleton);
 	}
@@ -676,6 +684,7 @@ void RTAPROJECT::generateJointBoxes()
 	LoadFBX("JointBox.fbx", jointVerts, jointNorms, jointUV, jointPath[0]);
 	
 }
+
 RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 {
 
@@ -918,9 +927,9 @@ bool RTAPROJECT::Run()
 	POINT newMousePos = mousePos;
 	GetCursorPos(&newMousePos);
 	sc->GetDesc(&SwapChainDescVar);
-
 	XMStoreFloat4x4((XMFLOAT4X4*)&objecttoScene.ProjectionMatrix, XMMatrixPerspectiveFovLH(3.14f / 3.0f, (((float)SwapChainDescVar.BufferDesc.Width) / (float)SwapChainDescVar.BufferDesc.Height), 0.1f, 1000.0f));
-
+	currentFrame++;
+	currentTime.SetFrame(currentFrame, FbxTime::eFrames24);
 	const float ColorRGBA[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
 	thedevicecontext->ClearRenderTargetView(RenTarView, ColorRGBA);
 
@@ -1023,6 +1032,14 @@ bool RTAPROJECT::Run()
 	//thedevicecontext->DrawIndexed(numindexes, 0, 0);
 	for (unsigned int i = 0; i < meshBones.size(); i++)
 	{
+		KeyFrame nextKeyFrame;
+		for (unsigned int curKeyframe = 0; curKeyframe < meshBones[i].Keyframes.size(); curKeyframe++){
+			if (currentTime < meshBones[i].Keyframes[curKeyframe].keyTime){
+				nextKeyFrame = meshBones[i].Keyframes[curKeyframe];
+				break;
+			}
+		}
+		meshBones[i].joint = MatrixMultMatrix(meshBones[i].joint, nextKeyFrame.transform);
 		thedevicecontext->Map(constbuffer, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &Mapsubres);
 
 		memcpy(Mapsubres.pData, &meshBones[i].joint.mat, sizeof(meshBones[i].joint.mat));

@@ -1,5 +1,6 @@
 #pragma once
 #include<cmath>
+#include<fbxsdk.h>
 struct Matrix
 {
 	float mat[4][4];
@@ -11,10 +12,33 @@ struct Matrix
 		}
 		mat[0][0] = mat[1][1] = mat[2][2] = mat[3][3] = 1;
 	}
+	Matrix(FbxMatrix& _rhs){
+		for (int i = 0; i < 4; i++){
+			for (int j = 0; j < 4; j++){
+				mat[i][j] = _rhs.Get(i, j);
+			}
+		}
+	}
 	Matrix& operator=(Matrix& _rhs){
 		for (int i = 0; i < 4; i++){
 			for (int j = 0; j < 4; j++){
 				mat[i][j] = _rhs.mat[i][j];
+			}
+		}
+		return *this;
+	}
+	Matrix& operator=(FbxMatrix& _rhs){
+		for (int i = 0; i < 4; i++){
+			for (int j = 0; j < 4; j++){
+				mat[i][j] = _rhs.Get(i,j);
+			}
+		}
+		return *this;
+	}
+	Matrix& operator=(FbxAMatrix& _rhs){
+		for (int i = 0; i < 4; i++){
+			for (int j = 0; j < 4; j++){
+				mat[i][j] = _rhs.Get(i, j);
 			}
 		}
 		return *this;
