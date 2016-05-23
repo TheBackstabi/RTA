@@ -77,7 +77,7 @@ public:
 	struct KeyFrame
 	{
 		Matrix transform;
-		float keyTime;
+		FbxTime keyTime;
 	};
 	struct Bone
 	{
@@ -86,6 +86,7 @@ public:
 		vector<double>boneVertWeights;
 		vector<KeyFrame> Keyframes;
 		int parentindex = 0;
+		FbxTime curFrameTime;
 
 	};
 	int count = 0;
@@ -195,6 +196,7 @@ void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh, FbxNode* root)
 					meshBones[boneIndex].joint.mat[y][x] = globalBindposeInverseMatrix.Get(y, x);
 				}
 			}
+
 			meshBones[boneIndex].joint.mat[3][1] *= -1;
 			meshBones[boneIndex].joint.mat[3][2] *= -1;
 
@@ -221,16 +223,16 @@ void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh, FbxNode* root)
 			FbxTakeInfo* takeInfo = pFbxScene->GetTakeInfo(animStackName);
 			FbxTime start = takeInfo->mLocalTimeSpan.GetStart();
 			FbxTime end = takeInfo->mLocalTimeSpan.GetStop();
-			FbxTime AnimationLength = end.GetFrameCount(FbxTime::eFrames24) - start.GetFrameCount(FbxTime::eFrames24) + 1;
+			FbxTime AnimationLength = end.GetFrameCount(FbxTime::eFrames60) - start.GetFrameCount(FbxTime::eFrames60) + 1;
 			//Keyframe** currAnim = &mSkeleton.mJoints[currJointIndex].mAnimation;
 			KeyFrame currAnim;
-			for (FbxLongLong i = start.GetFrameCount(FbxTime::eFrames24); i <= end.GetFrameCount(FbxTime::eFrames24); ++i)
+			for (FbxLongLong i = start.GetFrameCount(FbxTime::eFrames60); i <= end.GetFrameCount(FbxTime::eFrames60); ++i)
 			{
 				FbxTime currTime;
-				currTime.SetFrame(i, FbxTime::eFrames24);
-				FbxAMatrix currentTransformOffset = bone->EvaluateGlobalTransform(currTime) * geometryTransform;
+				currTime.SetFrame(i, FbxTime::eFrames60);
+				FbxAMatrix currentTransformOffset = root->EvaluateGlobalTransform(currTime) * geometryTransform;
 				currAnim.transform = currentTransformOffset.Inverse() * bone->EvaluateGlobalTransform(currTime);
-				currAnim.keyTime = currTime.Get();
+				currAnim.keyTime = currTime;
 				meshBones[boneIndex].Keyframes.push_back(currAnim);
 			}
 		}
@@ -928,8 +930,10 @@ bool RTAPROJECT::Run()
 	GetCursorPos(&newMousePos);
 	sc->GetDesc(&SwapChainDescVar);
 	XMStoreFloat4x4((XMFLOAT4X4*)&objecttoScene.ProjectionMatrix, XMMatrixPerspectiveFovLH(3.14f / 3.0f, (((float)SwapChainDescVar.BufferDesc.Width) / (float)SwapChainDescVar.BufferDesc.Height), 0.1f, 1000.0f));
+	static int staticFrame = 0;
+	//currentFrame = staticFrame;
 	currentFrame++;
-	currentTime.SetFrame(currentFrame, FbxTime::eFrames24);
+	currentTime.SetFrame(currentFrame, FbxTime::eFrames60);
 	const float ColorRGBA[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
 	thedevicecontext->ClearRenderTargetView(RenTarView, ColorRGBA);
 
@@ -1033,16 +1037,23 @@ bool RTAPROJECT::Run()
 	for (unsigned int i = 0; i < meshBones.size(); i++)
 	{
 		KeyFrame nextKeyFrame;
-		for (unsigned int curKeyframe = 0; curKeyframe < meshBones[i].Keyframes.size(); curKeyframe++){
-			if (currentTime < meshBones[i].Keyframes[curKeyframe].keyTime){
-				nextKeyFrame = meshBones[i].Keyframes[curKeyframe];
-				break;
-			}
+		//for (unsigned int curKeyframe = currentFrame; curKeyframe < meshBones[i].Keyframes.size(); curKeyframe++){
+		//	if (currentTime.Get() == meshBones[i].Keyframes[curKeyframe].keyTime.Get()){
+		//		currentTime.SetFrame(currentFrame, FbxTime::eFrames60);
+		//		nextKeyFrame = meshBones[i].Keyframes[curKeyframe];
+		//		break;
+		//	}
+		//}
+		nextKeyFrame = meshBones[i].Keyframes[currentFrame-1];
+		if (currentFrame >= meshBones[0].Keyframes.size()){
+			currentFrame = 1;
+			currentTime.SetFrame(currentFrame, FbxTime::eFrames60);
 		}
-		meshBones[i].joint = MatrixMultMatrix(meshBones[i].joint, nextKeyFrame.transform);
+		Matrix jointMat = meshBones[i].joint;
+		jointMat = MatrixMultMatrix(jointMat, nextKeyFrame.transform);
 		thedevicecontext->Map(constbuffer, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &Mapsubres);
 
-		memcpy(Mapsubres.pData, &meshBones[i].joint.mat, sizeof(meshBones[i].joint.mat));
+		memcpy(Mapsubres.pData, &jointMat.mat, sizeof(meshBones[i].joint.mat));
 
 		thedevicecontext->Unmap(constbuffer, NULL);
 
