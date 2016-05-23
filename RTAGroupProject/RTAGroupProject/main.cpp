@@ -81,11 +81,12 @@ public:
 	};
 	struct Bone
 	{
+		const char* name;
+		int parentindex = 0;
 		Matrix joint;
 		vector<int>boneAffectedVertIndices;
 		vector<double>boneVertWeights;
 		vector<KeyFrame> Keyframes;
-		int parentindex = 0;
 		FbxTime curFrameTime;
 
 	};
@@ -196,7 +197,7 @@ void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh, FbxNode* root)
 					meshBones[boneIndex].joint.mat[y][x] = globalBindposeInverseMatrix.Get(y, x);
 				}
 			}
-
+			meshBones[boneIndex].joint.mat[3][0] *= -1;
 			meshBones[boneIndex].joint.mat[3][1] *= -1;
 			meshBones[boneIndex].joint.mat[3][2] *= -1;
 
@@ -231,8 +232,9 @@ void RTAPROJECT::LoadMesh_Skeleton(FbxMesh *fbxMesh, FbxNode* root)
 				FbxTime currTime;
 				currTime.SetFrame(i, FbxTime::eFrames60);
 				FbxAMatrix currentTransformOffset = root->EvaluateGlobalTransform(currTime) * geometryTransform;
-				currAnim.transform = currentTransformOffset.Inverse() * bone->EvaluateGlobalTransform(currTime);
+				currAnim.transform = currentTransformOffset.Inverse() * bone->EvaluateGlobalTransform(currTime) *globalBindposeInverseMatrix;
 				currAnim.keyTime = currTime;
+
 				meshBones[boneIndex].Keyframes.push_back(currAnim);
 			}
 		}
@@ -366,8 +368,9 @@ HRESULT RTAPROJECT::LoadFBX(string filePath, vector<MyVertex>& pOutVertexVector,
 				continue;
 
 			FbxMesh* pMesh = (FbxMesh*)pFbxChildNode->GetNodeAttribute();
+
 			
-			LoadMesh_Skeleton(pMesh, pFbxRootNode);
+			LoadMesh_Skeleton(pMesh, pFbxChildNode);
 			int x = meshBones.size();
 
 			FbxVector4* pVertices = pMesh->GetControlPoints();
@@ -659,7 +662,7 @@ void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVerte
 
 
 	file.open(filenamenoextension + ".RTAmesh", ios_base::binary | ios_base::in);
-	if (!file.is_open())
+	if (file.is_open())
 	{
 		readfromRTAmesh(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath, theskeleton);
 	}
@@ -669,7 +672,7 @@ void RTAPROJECT::Loadfile(string filenamenoextension, vector<MyVertex>& pinVerte
 
 		LoadFBX(fullfilename, pinVertexVector, pinNormalVector, pinUVector, filepath);
 
-		WritetoBinary(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath, theskeleton);
+		//WritetoBinary(filenamenoextension, pinVertexVector, pinNormalVector, pinUVector, filepath, theskeleton);
 	}
 }
 void RTAPROJECT::generateJointBoxes()
