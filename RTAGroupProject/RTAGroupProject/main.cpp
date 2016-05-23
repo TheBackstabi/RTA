@@ -11,6 +11,7 @@
 #include "WICTextureLoader.h"
 #include "VertexShader.csh"
 #include "PixelShader.csh"
+#include "JointPixelShader.csh"
 #include <fbxsdk.h>
 #pragma comment (lib, "d3d11.lib")
 #pragma comment (lib, "dxgi.lib") 
@@ -57,6 +58,8 @@ class RTAPROJECT
 	float translateparam = 0.0f;
 	ID3D11VertexShader *vertshader;
 	ID3D11PixelShader *pixshader;
+	ID3D11PixelShader *jointpixshader;
+
 	POINT mousePos;
 	FbxManager* fbxManager = nullptr;
 	FbxAnimEvaluator* mySceneEvaluator;
@@ -95,6 +98,8 @@ public:
 	bool renderjoints = true;
 	bool canpress = true;
 	bool canpress2 = true;
+	bool canpress3 = true;
+	bool wireframe = false;
 	FbxTime currentTime = 0;
 	FbxLongLong currentFrame = 0;
 	vector<MyVertex> vertexvec;
@@ -868,6 +873,9 @@ RTAPROJECT::RTAPROJECT(HINSTANCE hinst, WNDPROC proc)
 	thedevice->CreatePixelShader(PixelShader, PixelShadersize, NULL, &pixshader);
 	int VertexShadersize = sizeof(VertexShader) / sizeof(VertexShader[0]);
 	thedevice->CreateVertexShader(VertexShader, VertexShadersize, NULL, &vertshader);
+	int jointpixelshadersize = sizeof(JointPixelShader) / sizeof(JointPixelShader[0]);
+	thedevice->CreatePixelShader(JointPixelShader, jointpixelshadersize, NULL, &jointpixshader);
+
 
 
 	D3D11_INPUT_ELEMENT_DESC thelayout[] =
@@ -994,6 +1002,15 @@ bool RTAPROJECT::Run()
 	{
 		canpress2 = true;
 	}
+	if (GetAsyncKeyState('3') && canpress3)
+	{
+		wireframe = !wireframe;
+		canpress3 = false;
+	}
+	else if (!GetAsyncKeyState('3'))
+	{
+		canpress3 = true;
+	}
 	if (GetAsyncKeyState(VK_RBUTTON) || GetAsyncKeyState(VK_LBUTTON)){
 		FLOAT3 savedPosition;
 		savedPosition.x = objecttoScene.ViewMatrix.mat[3][0];
@@ -1031,7 +1048,14 @@ bool RTAPROJECT::Run()
 	thedevicecontext->PSSetShader(pixshader, 0, 0);
 	thedevicecontext->PSSetShaderResources(0, 1, &floorRSV[0]);
 	thedevicecontext->IASetInputLayout(InputLayout);
-	thedevicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	if (!wireframe)
+	{
+		thedevicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	}
+	else
+	{
+		thedevicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+	}
 	if (renderteddy)
 	{
 		thedevicecontext->Draw(vertexvec.size(), 0);
@@ -1040,16 +1064,9 @@ bool RTAPROJECT::Run()
 	for (unsigned int i = 0; i < meshBones.size(); i++)
 	{
 		KeyFrame nextKeyFrame;
-		//for (unsigned int curKeyframe = currentFrame; curKeyframe < meshBones[i].Keyframes.size(); curKeyframe++){
-		//	if (currentTime.Get() == meshBones[i].Keyframes[curKeyframe].keyTime.Get()){
-		//		currentTime.SetFrame(currentFrame, FbxTime::eFrames60);
-		//		nextKeyFrame = meshBones[i].Keyframes[curKeyframe];
-		//		break;
-		//	}
-		//}
-		nextKeyFrame = meshBones[i].Keyframes[currentFrame-1];
-		if (currentFrame >= meshBones[0].Keyframes.size()){
-			currentFrame = 1;
+		nextKeyFrame = meshBones[i].Keyframes[currentFrame];
+		if (currentFrame >= meshBones[0].Keyframes.size() - 1){
+			currentFrame = 3;
 			currentTime.SetFrame(currentFrame, FbxTime::eFrames60);
 		}
 		Matrix jointMat = meshBones[i].joint;
@@ -1074,7 +1091,7 @@ bool RTAPROJECT::Run()
 		thedevicecontext->IASetVertexBuffers(0, 1, &buffer2, &Stride, &Offset);
 		thedevicecontext->IASetIndexBuffer(Indexbuffer, DXGI_FORMAT_R32_UINT, 0);
 		thedevicecontext->VSSetShader(vertshader, 0, 0);
-		thedevicecontext->PSSetShader(pixshader, 0, 0);
+		thedevicecontext->PSSetShader(jointpixshader, 0, 0);
 		thedevicecontext->PSSetShaderResources(0, 1, &floorRSV[0]);
 		thedevicecontext->IASetInputLayout(InputLayout);
 		thedevicecontext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1099,6 +1116,7 @@ bool RTAPROJECT::ShutDown()
 	SAFE_RELEASE(constbuffer2);
 	SAFE_RELEASE(vertshader);
 	SAFE_RELEASE(pixshader);
+	SAFE_RELEASE(jointpixshader);
 	SAFE_RELEASE(InputLayout);
 	SAFE_RELEASE(sc);
 	SAFE_RELEASE(thedevicecontext);

@@ -28,6 +28,7 @@
   <ItemGroup>
     <FxCompile Include="VertexShader.hlsl" />
     <FxCompile Include="PixelShader.hlsl" />
+    <FxCompile Include="JointPixelShader.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="MathStuffh.h">
